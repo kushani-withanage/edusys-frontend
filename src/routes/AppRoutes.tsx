@@ -2,6 +2,8 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute';
 import AdminLayout from '@/layouts/AdminLayout';
 import Dashboard from '@/pages/admin/Dashboard';
+import UsersRoles from '@/pages/admin/UsersRoles';
+import AddUser from '@/pages/admin/AddUser';
 import { Login } from '@/pages/auth/Login';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -24,6 +26,8 @@ function AppRoutes() {
       <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
         <Route element={<AdminLayout />}>
           <Route path="/admin/dashboard" element={<Dashboard />} />
+          <Route path="/admin/users-roles" element={<UsersRoles />} />
+          <Route path="/admin/users-roles/new" element={<AddUser />} />
         </Route>
       </Route>
 
