@@ -4,6 +4,16 @@ import AdminLayout from '@/layouts/AdminLayout';
 import Dashboard from '@/pages/admin/Dashboard';
 import UsersRoles from '@/pages/admin/UsersRoles';
 import AddUser from '@/pages/admin/AddUser';
+import CoursesCalendars from '@/pages/admin/CoursesCalendars';
+import Admissions from '@/pages/admin/Admissions';
+import FeeManagement from '@/pages/admin/FeeManagement';
+import Exams from '@/pages/admin/Exams';
+import Results from '@/pages/admin/Results';
+import Materials from '@/pages/admin/Materials';
+import CareerTasks from '@/pages/admin/CareerTasks';
+import Reviews from '@/pages/admin/Reviews';
+import PointsLevels from '@/pages/admin/PointsLevels';
+import Reports from '@/pages/admin/Reports';
 import { Login } from '@/pages/auth/Login';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -28,6 +38,16 @@ function AppRoutes() {
           <Route path="/admin/dashboard" element={<Dashboard />} />
           <Route path="/admin/users-roles" element={<UsersRoles />} />
           <Route path="/admin/users-roles/new" element={<AddUser />} />
+          <Route path="/admin/courses-calendars" element={<CoursesCalendars />} />
+          <Route path="/admin/admissions" element={<Admissions />} />
+          <Route path="/admin/fee-management" element={<FeeManagement />} />
+          <Route path="/admin/exams" element={<Exams />} />
+          <Route path="/admin/results" element={<Results />} />
+          <Route path="/admin/materials" element={<Materials />} />
+          <Route path="/admin/task-creator" element={<CareerTasks />} />
+          <Route path="/admin/reviewer-workflow" element={<Reviews />} />
+          <Route path="/admin/points-levels" element={<PointsLevels />} />
+          <Route path="/admin/reports" element={<Reports />} />
         </Route>
       </Route>
 

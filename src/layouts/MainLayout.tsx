@@ -8,6 +8,7 @@ export interface SidebarLink {
   label: string;
   path: string;
   icon: React.ComponentType<{ className?: string }>;
+  subLinks?: { label: string; path: string }[];
 }
 
 export interface SidebarGroup {
@@ -34,6 +35,25 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [expandedLinks, setExpandedLinks] = useState<Record<string, boolean>>({});
+
+  const toggleExpand = (path: string) => {
+    setExpandedLinks(prev => ({
+      ...prev,
+      [path]: !prev[path]
+    }));
+  };
+
+  const isLinkExpanded = (link: SidebarLink) => {
+    if (expandedLinks[link.path] !== undefined) {
+      return expandedLinks[link.path];
+    }
+    if (link.subLinks) {
+      const currentFullUrl = location.pathname + location.search;
+      return link.subLinks.some(sub => currentFullUrl === sub.path || location.pathname === sub.path.split('?')[0]);
+    }
+    return false;
+  };
 
   const handleLogout = async () => {
     try {
@@ -46,43 +66,110 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
 
 
   const renderLinkItem = (link: SidebarLink) => {
-    const isActive = location.pathname === link.path || location.pathname.startsWith(link.path + '/');
+    const currentFullUrl = location.pathname + location.search;
+    const isParentActive = location.pathname === link.path || 
+      (link.subLinks && link.subLinks.some(sub => currentFullUrl === sub.path || location.pathname === sub.path.split('?')[0]));
     const LinkIcon = link.icon;
+    const hasSubLinks = !!link.subLinks && link.subLinks.length > 0;
+    const expanded = hasSubLinks && isLinkExpanded(link);
+
+    const handleParentClick = (e: React.MouseEvent) => {
+      if (hasSubLinks) {
+        e.preventDefault();
+        toggleExpand(link.path);
+      } else {
+        setMobileMenuOpen(false);
+      }
+    };
 
     return (
-      <Link
-        key={link.path}
-        to={link.path}
-        onClick={() => setMobileMenuOpen(false)}
-        className={cn(
-          'group flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 cursor-pointer relative overflow-hidden',
-          isActive
-            ? 'bg-gradient-to-r from-[#4F3FF0]/10 to-[#4F3FF0]/5 text-[#4F3FF0] border border-[#4F3FF0]/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.8)]'
-            : 'text-slate-550 hover:text-slate-900 hover:bg-slate-100/60'
-        )}
-      >
-        {/* Left active line indicator */}
-        {isActive && (
-          <div className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#4F3FF0] rounded-r-md" />
-        )}
-        
-        <div className="flex items-center gap-3">
-          <LinkIcon
+      <div key={link.path} className="space-y-1">
+        {hasSubLinks ? (
+          <button
+            onClick={handleParentClick}
             className={cn(
-              'h-4.5 w-4.5 transition-transform duration-200 group-hover:scale-105',
-              isActive ? 'text-[#4F3FF0]' : 'text-slate-400 group-hover:text-slate-600'
+              'w-full group flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 cursor-pointer relative overflow-hidden text-left focus:outline-none',
+              isParentActive
+                ? 'bg-gradient-to-r from-[#4F3FF0]/10 to-[#4F3FF0]/5 text-[#4F3FF0] border border-[#4F3FF0]/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.8)]'
+                : 'text-slate-550 hover:text-slate-900 hover:bg-slate-100/60'
             )}
-          />
-          <span>{link.label}</span>
-        </div>
+          >
+            {isParentActive && (
+              <div className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#4F3FF0] rounded-r-md" />
+            )}
+            <div className="flex items-center gap-3">
+              <LinkIcon
+                className={cn(
+                  'h-4.5 w-4.5 transition-transform duration-200 group-hover:scale-105',
+                  isParentActive ? 'text-[#4F3FF0]' : 'text-slate-400 group-hover:text-slate-600'
+                )}
+              />
+              <span>{link.label}</span>
+            </div>
+            <ChevronDown
+              className={cn(
+                'h-3.5 w-3.5 transition-transform duration-200 text-slate-400 group-hover:text-slate-650 shrink-0',
+                expanded && 'rotate-180 text-[#4F3FF0]'
+              )}
+            />
+          </button>
+        ) : (
+          <Link
+            to={link.path}
+            onClick={() => setMobileMenuOpen(false)}
+            className={cn(
+              'group flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 cursor-pointer relative overflow-hidden',
+              isParentActive
+                ? 'bg-gradient-to-r from-[#4F3FF0]/10 to-[#4F3FF0]/5 text-[#4F3FF0] border border-[#4F3FF0]/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.8)]'
+                : 'text-slate-550 hover:text-slate-900 hover:bg-slate-100/60'
+            )}
+          >
+            {isParentActive && (
+              <div className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-[#4F3FF0] rounded-r-md" />
+            )}
+            
+            <div className="flex items-center gap-3">
+              <LinkIcon
+                className={cn(
+                  'h-4.5 w-4.5 transition-transform duration-200 group-hover:scale-105',
+                  isParentActive ? 'text-[#4F3FF0]' : 'text-slate-400 group-hover:text-slate-600'
+                )}
+              />
+              <span>{link.label}</span>
+            </div>
 
-        <ChevronRight
-          className={cn(
-            'h-3.5 w-3.5 opacity-0 transition-all duration-200',
-            isActive ? 'opacity-100 text-[#4F3FF0]' : 'group-hover:opacity-60 group-hover:translate-x-0.5 text-slate-400'
-          )}
-        />
-      </Link>
+            <ChevronRight
+              className={cn(
+                'h-3.5 w-3.5 opacity-0 transition-all duration-200',
+                isParentActive ? 'opacity-100 text-[#4F3FF0]' : 'group-hover:opacity-60 group-hover:translate-x-0.5 text-slate-400'
+              )}
+            />
+          </Link>
+        )}
+
+        {hasSubLinks && expanded && (
+          <div className="pl-5.5 mt-1.5 space-y-1.5 border-l border-slate-100 ml-6 flex flex-col">
+            {link.subLinks!.map(sub => {
+              const isSubActive = currentFullUrl === sub.path || (location.pathname === sub.path.split('?')[0] && location.search === sub.path.split('?')[1]);
+              return (
+                <Link
+                  key={sub.path}
+                  to={sub.path}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    'block py-2.5 px-3.5 text-[11px] font-bold tracking-wide rounded-lg transition-all duration-150 border border-transparent leading-none select-none',
+                    isSubActive
+                      ? 'bg-[#4F3FF0]/7 text-[#4F3FF0] border-[#4F3FF0]/10 shadow-[inset_0_0.5px_1px_rgba(255,255,255,0.7)]'
+                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                  )}
+                >
+                  {sub.label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
     );
   };
 

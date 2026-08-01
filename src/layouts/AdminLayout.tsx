@@ -27,7 +27,17 @@ const adminSidebarGroups: SidebarGroup[] = [
     category: 'Administration',
     links: [
       { label: 'Users & Roles', path: '/admin/users-roles', icon: Users },
-      { label: 'Courses & Calendars', path: '/admin/courses-calendars', icon: BookOpen },
+      { 
+        label: 'Courses & Calendars', 
+        path: '/admin/courses-calendars', 
+        icon: BookOpen,
+        subLinks: [
+          { label: 'Course Registry', path: '/admin/courses-calendars?tab=courses' },
+          { label: 'Batches Planner', path: '/admin/courses-calendars?tab=batches' },
+          { label: 'Academic Calendar', path: '/admin/courses-calendars?tab=calendar' },
+          { label: 'Admissions Inquiries', path: '/admin/courses-calendars?tab=admissions' }
+        ]
+      },
       { label: 'Admissions', path: '/admin/admissions', icon: ClipboardList },
       { label: 'Fee Management', path: '/admin/fee-management', icon: CreditCard },
     ]
