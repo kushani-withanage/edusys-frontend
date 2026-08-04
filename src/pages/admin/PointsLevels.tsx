@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import Button from '@/components/common/Button';
 import { pointsLevelService, type CareerLevelData } from '@/services/pointsLevelService';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface LevelConfig {
   levelId: string;
@@ -174,18 +175,17 @@ export const PointsLevels: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-3 p-4 bg-rose-50 border border-rose-250 rounded-2xl text-rose-800 text-sm">
-          <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
-          <p className="font-medium">{error}</p>
-        </div>
+        <Alert variant="destructive">
+          <AlertCircle className="h-5 w-5 text-rose-500 mt-0.5 shrink-0" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {/* Header Panel */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#E9EDF5] pb-6">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2 font-heading">
+          <h1 className="text-[18px] md:text-xl lg:text-2xl font-semibold text-slate-800 tracking-tight flex items-center gap-2 font-heading">
             <Settings className="h-7 w-7 text-[#4F3FF0]" />
             Career Scale Levels & Configurations
           </h1>

@@ -10,6 +10,7 @@ import {
 import { studentService } from '@/services/studentService';
 import { feeService } from '@/services/feeService';
 import { inquiryService } from '@/services/inquiryService';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface MeritStudent {
   rank: number;
@@ -121,18 +122,17 @@ export const Reports: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-3 p-4 bg-rose-50 border border-rose-250 rounded-2xl text-rose-800 text-sm">
-          <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
-          <p className="font-medium">{error}</p>
-        </div>
+        <Alert variant="destructive">
+          <AlertCircle className="h-5 w-5 text-rose-500 mt-0.5 shrink-0" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {/* Header Panel */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#E9EDF5] pb-6">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2 font-heading">
+          <h1 className="text-[18px] md:text-xl lg:text-2xl font-semibold text-slate-800 tracking-tight flex items-center gap-2 font-heading">
             Reports & Analytics
           </h1>
           <p className="text-slate-500 text-sm mt-1">

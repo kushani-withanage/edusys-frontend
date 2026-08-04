@@ -17,6 +17,7 @@ import {
 import Button from '@/components/common/Button';
 import TextField from '@/components/common/TextField';
 import { examService, type QuestionData, type ExamData } from '@/services/examService';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface Question {
   questionId: string;
@@ -88,90 +89,6 @@ export const Exams: React.FC = () => {
   });
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
 
-  // --- Mock Fallbacks (Sandbox visualization mode) ---
-  const defaultQuestions = useMemo<Question[]>(() => [
-    {
-      questionId: 'q-1',
-      questionType: 'SHORT_ANSWER',
-      questionText: 'Explain the difference between SQL and NoSQL databases.',
-      courseModule: 'Database Management System',
-      createdBy: 'Mrs. Kushani Withanage',
-      marks: 10,
-      correctAnswers: ['SQL is relational, NoSQL is non-relational.']
-    },
-    {
-      questionId: 'q-2',
-      questionType: 'MCQ',
-      questionText: 'Which of the following is NOT a fundamental pillar of OOP?',
-      courseModule: 'Object Oriented Programming',
-      createdBy: 'Mr. Kasun Jayasuriya',
-      marks: 5,
-      options: ['Inheritance', 'Polymorphism', 'Compilation', 'Encapsulation'],
-      correctAnswers: ['Compilation']
-    },
-    {
-      questionId: 'q-3',
-      questionType: 'MCQ',
-      questionText: 'What is the worst-case time complexity of Quick Sort?',
-      courseModule: 'Programming Fundamentals',
-      createdBy: 'Mr. Kasun Jayasuriya',
-      marks: 5,
-      options: ['O(N log N)', 'O(N)', 'O(N^2)', 'O(1)'],
-      correctAnswers: ['O(N^2)']
-    },
-    {
-      questionId: 'q-4',
-      questionType: 'SHORT_ANSWER',
-      questionText: 'Explain normalized design patterns up to 3NF.',
-      courseModule: 'Database Management System',
-      createdBy: 'Mrs. Kushani Withanage',
-      marks: 10,
-      correctAnswers: ['1NF flat, 2NF partial key dependencies removed, 3NF transitive dependencies resolved.']
-    }
-  ], []);
-
-  const defaultExams = useMemo<Exam[]>(() => [
-    {
-      examId: 'ex-1',
-      title: 'Software Design Patterns Final Exam',
-      startTime: '2026-07-20T10:00:00',
-      durationMinutes: 120,
-      totalMarks: 100,
-      questionIds: ['q-2'],
-      createdBy: 'Mr. Kasun Jayasuriya',
-      batchName: 'BATCH iCD110',
-      venue: 'Lab 03 (Panadura Block)',
-      enrolledCount: 34,
-      status: 'Upcoming'
-    },
-    {
-      examId: 'ex-2',
-      title: 'HTML & CSS Core Quiz',
-      startTime: '2026-07-12T14:00:00',
-      durationMinutes: 45,
-      totalMarks: 50,
-      questionIds: ['q-3'],
-      createdBy: 'Mrs. Kushani Withanage',
-      batchName: 'BATCH iCM111',
-      venue: 'Online (LMS Portal)',
-      enrolledCount: 42,
-      status: 'Live'
-    },
-    {
-      examId: 'ex-3',
-      title: 'Intro to Database normalization',
-      startTime: '2026-06-30T09:00:00',
-      durationMinutes: 60,
-      totalMarks: 75,
-      questionIds: ['q-1', 'q-4'],
-      createdBy: 'Mrs. Kushani Withanage',
-      batchName: 'BATCH iCD112',
-      venue: 'Lab 01 (Engineering Block)',
-      enrolledCount: 28,
-      status: 'Completed'
-    }
-  ], []);
-
   // --- Fetch API data ---
   const fetchData = async () => {
     try {
@@ -183,31 +100,13 @@ export const Exams: React.FC = () => {
         examService.getExams()
       ]);
 
-      // Resolve course modules on fetched backend questions if absent
-      const resolvedQuestions = questionsData.map((q, idx) => ({
-        ...q,
-        courseModule: q.courseModule || defaultQuestions[idx % defaultQuestions.length]?.courseModule || 'General'
-      }));
-
-      // Resolve attributes on fetched backend exams if absent
-      const resolvedExams = examsData.map((e, idx) => {
-        const fallback = defaultExams[idx % defaultExams.length];
-        return {
-          ...e,
-          batchName: e.batchName || fallback.batchName,
-          venue: e.venue || fallback.venue,
-          enrolledCount: e.enrolledCount || fallback.enrolledCount,
-          status: e.status || fallback.status || 'Upcoming'
-        };
-      });
-
-      setQuestions(resolvedQuestions.length > 0 ? resolvedQuestions : defaultQuestions);
-      setExams(resolvedExams.length > 0 ? resolvedExams : defaultExams);
+      setQuestions(questionsData);
+      setExams(examsData);
     } catch (err: any) {
       console.error(err);
-      setError('Could not connect to backend server. Running in simulated sandbox mode.');
-      setQuestions(defaultQuestions);
-      setExams(defaultExams);
+      setError('Could not connect to backend server. Please verify the backend service is running.');
+      setQuestions([]);
+      setExams([]);
     } finally {
       setLoading(false);
     }
@@ -215,7 +114,7 @@ export const Exams: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, [defaultQuestions, defaultExams]);
+  }, []);
 
   // --- Filtered lists ---
   const filteredQuestions = useMemo(() => {
@@ -271,29 +170,7 @@ export const Exams: React.FC = () => {
       alert('Question added to Question Bank successfully!');
     } catch (err: any) {
       console.error(err);
-      // Fallback
-      const isMCQ = questionForm.questionType === 'MCQ';
-      const options = isMCQ 
-        ? [questionForm.option1, questionForm.option2, questionForm.option3, questionForm.option4].filter(Boolean)
-        : [];
-      
-      const correctAnswers = isMCQ
-        ? [options[Number(questionForm.correctAnswerOption) - 1]].filter(Boolean)
-        : [questionForm.correctAnswerText];
-
-      const sandboxCreated: Question = {
-        questionId: 'q-' + (questions.length + 1),
-        questionType: questionForm.questionType,
-        questionText: questionForm.questionText,
-        options,
-        marks: Number(questionForm.marks),
-        correctAnswers,
-        createdBy: questionForm.createdBy,
-        courseModule: questionForm.courseModule
-      };
-      setQuestions(prev => [...prev, sandboxCreated]);
-      setShowQuestionModal(false);
-      alert('Simulation: Question added locally.');
+      alert('Failed to save question to database.');
     } finally {
       setSubmitting(false);
     }
@@ -309,8 +186,7 @@ export const Exams: React.FC = () => {
       alert('Question deleted successfully.');
     } catch (err: any) {
       console.error(err);
-      setQuestions(prev => prev.filter(q => q.questionId !== id));
-      alert('Simulation: Question deleted.');
+      alert('Failed to delete question from database.');
     }
   };
 
@@ -367,38 +243,7 @@ export const Exams: React.FC = () => {
 
     } catch (err: any) {
       console.error(err);
-      // Fallback
-      const totalMarks = questions
-        .filter(q => selectedQuestionIds.includes(q.questionId))
-        .reduce((sum, q) => sum + q.marks, 0);
-
-      const sandboxCreated: Exam = {
-        examId: 'ex-' + (exams.length + 1),
-        title: examForm.title,
-        startTime: examForm.startTime,
-        durationMinutes: Number(examForm.durationMinutes),
-        totalMarks: totalMarks,
-        questionIds: selectedQuestionIds,
-        createdBy: 'Mrs. Kushani Withanage',
-        batchName: 'BATCH ' + examForm.batchName.split(' ')[0],
-        venue: examForm.venue,
-        enrolledCount: 30,
-        status: 'Upcoming'
-      };
-
-      setExams(prev => [sandboxCreated, ...prev]);
-      alert('Simulation: Exam scheduled locally.');
-      
-      setExamForm({
-        title: '',
-        durationMinutes: '60',
-        startTime: new Date(Date.now() + 86400000).toISOString().slice(0, 16),
-        batchName: 'iCD110 (Programming Fundamentals)',
-        venue: 'Lab 03 (Panadura Block)',
-        courseModule: 'Programming Fundamentals'
-      });
-      setSelectedQuestionIds([]);
-      setActiveTab('calendar');
+      alert('Failed to publish and schedule exam.');
     } finally {
       setSubmitting(false);
     }
@@ -414,8 +259,7 @@ export const Exams: React.FC = () => {
       alert('Exam cancelled successfully.');
     } catch (err: any) {
       console.error(err);
-      setExams(prev => prev.filter(e => e.examId !== id));
-      alert('Simulation: Exam cancelled.');
+      alert('Failed to cancel exam.');
     }
   };
 
@@ -450,18 +294,17 @@ export const Exams: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-3 p-4 bg-rose-50 border border-rose-250 rounded-2xl text-rose-800 text-sm animate-in fade-in duration-200">
-          <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
-          <p className="font-medium">{error}</p>
-        </div>
+        <Alert variant="destructive" className="animate-in fade-in duration-200">
+          <AlertCircle className="h-5 w-5 text-rose-500 mt-0.5 shrink-0" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {/* Header Panel */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#E9EDF5] pb-6">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2 font-heading">
+          <h1 className="text-[18px] md:text-xl lg:text-2xl font-semibold text-slate-800 tracking-tight flex items-center gap-2 font-heading">
             <GraduationCap className="h-7 w-7 text-[#4F3FF0]" />
             Academic Panel Desk
           </h1>
@@ -565,50 +408,52 @@ export const Exams: React.FC = () => {
                 ) : (
                   <div className="space-y-4">
                     {exams.map(ex => (
-                      <div key={ex.examId} className="p-5 border border-[#E9EDF5] hover:border-slate-300 rounded-2xl transition-all relative">
-                        {/* Cancel button */}
-                        <button 
-                          onClick={() => handleDeleteExam(ex.examId, ex.title)}
-                          className="absolute top-4 right-4 p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
-                          title="Cancel Exam Schedule"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-
+                      <div key={ex.examId} className="p-5 border border-[#E9EDF5] hover:border-slate-300 rounded-2xl transition-all">
                         <div className="flex items-center justify-between gap-4 flex-wrap">
                           <span className="text-[10px] font-extrabold text-[#4F3FF0] bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-full uppercase">
                             {ex.batchName}
                           </span>
                           
-                          <span className={`inline-flex items-center px-3 py-0.5 border text-xs font-semibold rounded-full select-none ${
-                            ex.status === 'Live'
-                              ? 'bg-blue-50 text-blue-600 border-blue-200'
-                              : ex.status === 'Completed'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-250'
-                              : 'bg-amber-50 text-amber-600 border-amber-250'
-                          }`}>
-                            {ex.status || 'Upcoming'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center px-3 py-0.5 border text-xs font-semibold rounded-full select-none ${
+                              ex.status === 'Live'
+                                ? 'bg-blue-50 text-blue-600 border-blue-200'
+                                : ex.status === 'Completed'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-250'
+                                : 'bg-amber-50 text-amber-600 border-amber-250'
+                            }`}>
+                              {ex.status || 'Upcoming'}
+                            </span>
+                            
+                            {/* Cancel button */}
+                            <button 
+                              onClick={() => handleDeleteExam(ex.examId, ex.title)}
+                              className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                              title="Cancel Exam Schedule"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
                         </div>
 
                         <h4 className="font-extrabold text-slate-800 text-base mt-3 font-sans leading-snug">{ex.title}</h4>
                         
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5 text-slate-500 font-semibold text-xs leading-none">
-                          <div className="flex items-center gap-1.5">
-                            <Clock className="h-4 w-4 text-slate-400" />
-                            {ex.durationMinutes} Minutes
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5 text-slate-500 font-semibold text-xs leading-normal">
+                          <div className="flex items-start gap-1.5">
+                            <Clock className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                            <span>{ex.durationMinutes} Minutes</span>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <MapPin className="h-4 w-4 text-slate-400" />
-                            {ex.venue || 'Online (LMS)'}
+                          <div className="flex items-start gap-1.5">
+                            <MapPin className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                            <span>{ex.venue || 'Online (LMS)'}</span>
                           </div>
-                          <div className="flex items-center gap-1.5 col-span-2 md:col-span-1">
-                            <Calendar className="h-4 w-4 text-slate-400" />
-                            {formatExamDate(ex.startTime)}
+                          <div className="flex items-start gap-1.5 col-span-2 md:col-span-1">
+                            <Calendar className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                            <span>{formatExamDate(ex.startTime)}</span>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <Users className="h-4 w-4 text-slate-400" />
-                            {ex.enrolledCount || 20} Enrolled
+                          <div className="flex items-start gap-1.5">
+                            <Users className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                            <span>{ex.enrolledCount || 20} Enrolled</span>
                           </div>
                         </div>
                       </div>

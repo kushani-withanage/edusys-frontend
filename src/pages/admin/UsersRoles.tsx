@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import Button from '@/components/common/Button';
 import { api } from '@/utils/api';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export interface User {
   userId: string;
@@ -137,7 +138,7 @@ export const UsersRoles: React.FC = () => {
       {/* Header Panel */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#E9EDF5] pb-6">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">User Management</h1>
+          <h1 className="text-[18px] md:text-xl lg:text-2xl font-semibold text-slate-800 tracking-tight">User Management</h1>
           <p className="text-slate-500 text-sm mt-1">
             Configure global users, administrative permissions, and roles mapping.
           </p>
@@ -154,10 +155,10 @@ export const UsersRoles: React.FC = () => {
 
       {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-3 p-4 bg-rose-50 border border-rose-250 rounded-2xl text-rose-800 text-sm animate-in fade-in duration-200">
-          <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
-          <p className="font-medium">{error}</p>
-        </div>
+        <Alert variant="destructive" className="animate-in fade-in duration-200">
+          <AlertCircle className="h-5 w-5 text-rose-500 mt-0.5 shrink-0" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {/* Filters Card */}

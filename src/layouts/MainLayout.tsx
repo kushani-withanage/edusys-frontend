@@ -24,6 +24,59 @@ export interface MainLayoutProps {
   logoIcon?: React.ComponentType<{ className?: string }>;
 }
 
+const getBreadcrumbLabel = (segment: string): string => {
+  const customMap: Record<string, string> = {
+    dashboard: 'Dashboard',
+    academics: 'My Academics',
+    courses: 'Courses',
+    career: 'Career Scale',
+    settings: 'Settings',
+    new: 'Create Course Template',
+    'users-roles': 'Users & Roles',
+    'courses-calendars': 'Courses & Batches',
+    admissions: 'Admissions',
+    'fee-management': 'Fee Management',
+    exams: 'Exams',
+    results: 'Results',
+    materials: 'Materials',
+    'task-creator': 'Task Creator',
+    'reviewer-workflow': 'Reviews',
+    'points-levels': 'Points & Levels',
+    reports: 'Reports'
+  };
+  
+  const key = segment.toLowerCase();
+  if (customMap[key]) return customMap[key];
+  
+  const isCourseId = key.startsWith('crs') || key.startsWith('icd') || key.startsWith('icm');
+  if (isCourseId) {
+    const stored = localStorage.getItem('custom_courses');
+    if (stored) {
+      const customCourses = JSON.parse(stored);
+      const found = customCourses.find((c: any) => 
+        c.courseId.toUpperCase() === segment.toUpperCase() || 
+        c.batchCode.toUpperCase() === segment.toUpperCase()
+      );
+      if (found) return `${found.batchCode} ${found.courseName}`;
+    }
+    
+    const staticKey = segment.toUpperCase().replace(/-/g, '_');
+    const staticMap: Record<string, string> = {
+      CRS_1: 'ICD110 Programming Fundamentals',
+      ICD110: 'ICD110 Advanced Software Engineering',
+      CRS_2: 'ICM111 Database Management System',
+      ICM111: 'ICM111 Full Stack Web Development',
+      CRS_3: 'ICD112 Object Oriented Programming',
+      CRS_4: 'ICM113 Internet Technologies',
+      CRS_5: 'ICD114 Standalone Application',
+      CRS_6: 'ICD115 Enterprise Engineering'
+    };
+    if (staticMap[staticKey]) return staticMap[staticKey];
+  }
+
+  return segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');
+};
+
 export const MainLayout: React.FC<MainLayoutProps> = ({
   sidebarLinks = [],
   sidebarGroups,
@@ -36,6 +89,27 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedLinks, setExpandedLinks] = useState<Record<string, boolean>>({});
+
+  const generateBreadcrumbs = () => {
+    const rawSegments = location.pathname.split('/').filter(x => x);
+    const items = [{ label: 'Dashboard', path: user?.role === 'ADMIN' ? '/admin/dashboard' : '/student/dashboard' }];
+    
+    const subSegments = rawSegments.filter(seg => {
+      const lower = seg.toLowerCase();
+      return lower !== 'student' && lower !== 'admin' && lower !== 'parent' && lower !== 'teacher' && lower !== 'reviewer' && lower !== 'dashboard';
+    });
+    
+    let currentPath = user?.role === 'ADMIN' ? '/admin' : '/student';
+    subSegments.forEach((seg) => {
+      currentPath += `/${seg}`;
+      items.push({
+        label: getBreadcrumbLabel(seg),
+        path: currentPath
+      });
+    });
+    
+    return items;
+  };
 
   const toggleExpand = (path: string) => {
     setExpandedLinks(prev => ({
@@ -88,7 +162,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           <button
             onClick={handleParentClick}
             className={cn(
-              'w-full group flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 cursor-pointer relative overflow-hidden text-left focus:outline-none',
+              'w-full group flex items-center justify-between px-4 py-3 rounded-xl text-sm lg:text-base font-medium transition-all duration-200 cursor-pointer relative overflow-hidden text-left focus:outline-none',
               isParentActive
                 ? 'bg-gradient-to-r from-[#4F3FF0]/10 to-[#4F3FF0]/5 text-[#4F3FF0] border border-[#4F3FF0]/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.8)]'
                 : 'text-slate-550 hover:text-slate-900 hover:bg-slate-100/60'
@@ -118,7 +192,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             to={link.path}
             onClick={() => setMobileMenuOpen(false)}
             className={cn(
-              'group flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 cursor-pointer relative overflow-hidden',
+              'group flex items-center justify-between px-4 py-3 rounded-xl text-sm lg:text-base font-medium transition-all duration-200 cursor-pointer relative overflow-hidden',
               isParentActive
                 ? 'bg-gradient-to-r from-[#4F3FF0]/10 to-[#4F3FF0]/5 text-[#4F3FF0] border border-[#4F3FF0]/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.8)]'
                 : 'text-slate-550 hover:text-slate-900 hover:bg-slate-100/60'
@@ -157,10 +231,10 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                   to={sub.path}
                   onClick={() => setMobileMenuOpen(false)}
                   className={cn(
-                    'block py-2.5 px-3.5 text-[11px] font-bold tracking-wide rounded-lg transition-all duration-150 border border-transparent leading-none select-none',
+                    'block py-2.5 px-3.5 text-xs font-medium tracking-wide rounded-lg transition-all duration-150 border border-transparent leading-none select-none',
                     isSubActive
                       ? 'bg-[#4F3FF0]/7 text-[#4F3FF0] border-[#4F3FF0]/10 shadow-[inset_0_0.5px_1px_rgba(255,255,255,0.7)]'
-                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                      : 'text-slate-550 hover:text-slate-900 hover:bg-slate-100/60'
                   )}
                 >
                   {sub.label}
@@ -191,7 +265,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         {sidebarGroups ? (
           sidebarGroups.map((group, idx) => (
             <div key={group.category || idx} className="space-y-1.5">
-              <div className="text-[10px] font-bold text-slate-400 tracking-wider uppercase px-4 select-none">
+              <div className="text-xs font-semibold text-slate-400 tracking-wider uppercase px-4 select-none">
                 {group.category}
               </div>
               <div className="space-y-1">
@@ -319,7 +393,24 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         </header>
 
         {/* Dynamic Page Content Wrapper */}
-        <main className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto animate-in fade-in duration-300">
+        <main className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto animate-in fade-in duration-300 space-y-5">
+          {generateBreadcrumbs().length > 1 && (
+            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 select-none pb-2 border-b border-slate-100/40">
+              {generateBreadcrumbs().map((item, idx, arr) => (
+                <React.Fragment key={idx}>
+                  {idx < arr.length - 1 ? (
+                    <Link to={item.path} className="hover:text-[#4F3FF0] transition-colors">
+                      {item.label}
+                    </Link>
+                  ) : (
+                    <span className="text-slate-700 font-extrabold">{item.label}</span>
+                  )}
+                  {idx < arr.length - 1 && <ChevronRight className="h-3 w-3 text-slate-350 shrink-0" />}
+                </React.Fragment>
+              ))}
+            </div>
+          )}
+
           <Outlet />
         </main>
       </div>

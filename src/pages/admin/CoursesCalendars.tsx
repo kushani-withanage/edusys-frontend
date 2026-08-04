@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { 
   Plus, 
   Search, 
-  ChevronRight, 
-  Edit2, 
   Trash2, 
   Loader2, 
   AlertCircle, 
@@ -19,39 +17,37 @@ import { calendarService } from '@/services/calendarService';
 import { inquiryService } from '@/services/inquiryService';
 import { studentService } from '@/services/studentService';
 
-// --- Types ---
-interface Course {
-  courseId: string;
-  courseName: string;
-  credits: number;
-  durationWeeks: number;
-  description: string;
-}
+import type { Course, Batch, CalendarEvent, Inquiry } from '@/interfaces';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import CourseAccess from './CourseAccess';
 
-interface Batch {
-  batchId: string;
-  batchName: string;
-  startDate: string;
-  endDate: string;
-}
-
-interface CalendarEvent {
-  calendarId: string;
-  eventName: string;
-  eventDate: string;
-  description: string;
-  status: string; // EXAM, HOLIDAY, CLASS
-}
-
-interface Inquiry {
-  inquiryId: string;
-  applicantName: string;
-  contactInfo: string;
-  status: string; // New, Contacted, Provisionally Enrolled
-  inquiryDate: string;
-}
+const getBatchNameForCourse = (courseId: string, courseName: string): string => {
+  const map: Record<string, string> = {
+    'crs-1': 'iCD110',
+    'crs-2': 'iCM111',
+    'crs-3': 'iCD112',
+    'crs-4': 'iCM113',
+    'crs-5': 'iCD114',
+    'crs-6': 'iCD115',
+    'icd110': 'iCD110',
+    'icm111': 'iCM111',
+  };
+  const idKey = courseId.toLowerCase();
+  if (map[idKey]) return map[idKey];
+  
+  const nameLower = courseName.toLowerCase();
+  if (nameLower.includes('programming') || nameLower.includes('software')) return 'iCD110';
+  if (nameLower.includes('database') || nameLower.includes('web')) return 'iCM111';
+  if (nameLower.includes('oriented') || nameLower.includes('oop')) return 'iCD112';
+  if (nameLower.includes('internet') || nameLower.includes('technologies')) return 'iCM113';
+  if (nameLower.includes('standalone')) return 'iCD114';
+  if (nameLower.includes('enterprise')) return 'iCD115';
+  
+  return 'iCD110';
+};
 
 export const CoursesCalendars: React.FC = () => {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'courses';
 
@@ -85,38 +81,6 @@ export const CoursesCalendars: React.FC = () => {
   const [eventForm, setEventForm] = useState({ eventName: '', eventDate: '', description: '', status: 'CLASS' });
   const [inquiryForm, setInquiryForm] = useState({ applicantName: '', contactInfo: '', status: 'New', inquiryDate: '' });
 
-  // --- Mock Fallbacks (for beautiful presentation matching UIs) ---
-  const defaultCourses = useMemo<Course[]>(() => [
-    { courseId: 'crs-1', courseName: 'Programming Fundamentals', credits: 3, durationWeeks: 12, description: 'Introduction to algorithmic structures, variable mappings, logic loops, arrays, and problem-solving structures.' },
-    { courseId: 'crs-2', courseName: 'Database Management System', credits: 4, durationWeeks: 16, description: 'Relational query design schemas, SQL query execution plans, normalization rules, indexes, and ACID transactions.' },
-    { courseId: 'crs-3', courseName: 'Object Oriented Programming', credits: 4, durationWeeks: 16, description: 'Encapsulation, inheritance, polymorphism, abstract class overrides, design patterns, and Java syntax standards.' },
-    { courseId: 'crs-4', courseName: 'Internet Technologies', credits: 3, durationWeeks: 12, description: 'HTTP protocols, REST API architectures, client-server handshake, web security standards, and responsive web configurations.' },
-    { courseId: 'crs-5', courseName: 'Standalone Application', credits: 4, durationWeeks: 16, description: 'Desktop client application development, event-driven listener structures, local storage, and multithreading processes.' },
-    { courseId: 'crs-6', courseName: 'Enterprise Engineering', credits: 4, durationWeeks: 24, description: 'Distributed architectures, microservices, cloud deployments, message queue brokers, and automated CI/CD pipelines.' },
-  ], []);
-
-  const defaultBatches = useMemo(() => [
-    { batchId: 'bat-1', batchName: 'iCD110', startDate: '2026-02-01', endDate: '2026-05-01', courseName: 'Programming Fundamentals', teacher: 'Mr. Kasun Jayasuriya', studentCount: 34, status: 'Finished' },
-    { batchId: 'bat-2', batchName: 'iCM111', startDate: '2026-03-01', endDate: '2026-07-01', courseName: 'Database Management System', teacher: 'Mrs. Kushani Withanage', studentCount: 42, status: 'Active' },
-    { batchId: 'bat-3', batchName: 'iCD112', startDate: '2026-04-01', endDate: '2026-08-01', courseName: 'Object Oriented Programming', teacher: 'Mr. Kasun Jayasuriya', studentCount: 28, status: 'Active' },
-    { batchId: 'bat-4', batchName: 'iCM113', startDate: '2026-05-01', endDate: '2026-08-01', courseName: 'Internet Technologies', teacher: 'Mrs. Kushani Withanage', studentCount: 19, status: 'Active' },
-    { batchId: 'bat-5', batchName: 'iCD114', startDate: '2026-06-01', endDate: '2026-09-01', courseName: 'Standalone Application', teacher: 'Mr. Kasun Jayasuriya', studentCount: 22, status: 'Active' },
-    { batchId: 'bat-6', batchName: 'iCD115', startDate: '2026-07-01', endDate: '2026-10-01', courseName: 'Enterprise Engineering', teacher: 'Mrs. Kushani Withanage', studentCount: 15, status: 'Pending' },
-  ], []);
-
-  const defaultEvents = useMemo<CalendarEvent[]>(() => [
-    { calendarId: 'evt-1', eventName: 'Term 1 Exam: DBMS', eventDate: '2026-07-20', description: '1-Hour assessment test', status: 'EXAM' },
-    { calendarId: 'evt-2', eventName: 'Mid-Term Summer Holiday', eventDate: '2026-07-25', description: 'Full campus closure', status: 'HOLIDAY' },
-    { calendarId: 'evt-3', eventName: 'OOP Class Session', eventDate: '2026-07-15', description: 'Review session with Mr. Kasun Jayasuriya', status: 'CLASS' }
-  ], []);
-
-  const defaultInquiries = useMemo<Inquiry[]>(() => [
-    { inquiryId: 'inq-1', applicantName: 'Sharadha Madusinghe', contactInfo: 'sharadha@gmail.com', status: 'New', inquiryDate: '2026-07-11' },
-    { inquiryId: 'inq-2', applicantName: 'Dilshan Perera', contactInfo: 'dilshan@gmail.com', status: 'New', inquiryDate: '2026-07-10' },
-    { inquiryId: 'inq-3', applicantName: 'Kavindi Samarasinghe', contactInfo: 'kavindi@gmail.com', status: 'Contacted', inquiryDate: '2026-07-05' },
-    { inquiryId: 'inq-4', applicantName: 'Sachin Samarawickrama', contactInfo: 'sachin@gmail.com', status: 'Provisionally Enrolled', inquiryDate: '2026-07-01' }
-  ], []);
-
   // --- Fetch API data ---
   const fetchData = async () => {
     try {
@@ -124,35 +88,24 @@ export const CoursesCalendars: React.FC = () => {
       setError(null);
 
       const [coursesData, batchesData, eventsData, inquiriesData] = await Promise.all([
-        courseService.getCourses().catch(() => []),
-        batchService.getBatches().catch(() => []),
-        calendarService.getEvents().catch(() => []),
-        inquiryService.getInquiries().catch(() => [])
+        courseService.getCourses(),
+        batchService.getBatches(),
+        calendarService.getEvents(),
+        inquiryService.getInquiries()
       ]);
 
-      setCourses(coursesData.length > 0 ? coursesData : defaultCourses);
-      setBatches(batchesData.length > 0 ? batchesData : defaultBatches.map(b => ({
-        batchId: b.batchId,
-        batchName: b.batchName,
-        startDate: b.startDate,
-        endDate: b.endDate
-      })));
-      setEvents(eventsData.length > 0 ? eventsData : defaultEvents);
-      setInquiries(inquiriesData.length > 0 ? inquiriesData : defaultInquiries);
+      setCourses(coursesData);
+      setBatches(batchesData);
+      setEvents(eventsData);
+      setInquiries(inquiriesData);
 
     } catch (err: any) {
       console.error('Error fetching desk data:', err);
-      setError('Could not connect to the backend server. Using local sandbox visualization mode.');
-      // Initialize with mock fallbacks
-      setCourses(defaultCourses);
-      setBatches(defaultBatches.map(b => ({
-        batchId: b.batchId,
-        batchName: b.batchName,
-        startDate: b.startDate,
-        endDate: b.endDate
-      })));
-      setEvents(defaultEvents);
-      setInquiries(defaultInquiries);
+      setError('Could not connect to the backend server. Please verify the backend service is running.');
+      setCourses([]);
+      setBatches([]);
+      setEvents([]);
+      setInquiries([]);
     } finally {
       setLoading(false);
     }
@@ -160,7 +113,7 @@ export const CoursesCalendars: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, [defaultCourses, defaultBatches, defaultEvents, defaultInquiries]);
+  }, []);
 
   // Reset filters on tab change
   useEffect(() => {
@@ -176,26 +129,11 @@ export const CoursesCalendars: React.FC = () => {
   }, [courses, searchQuery]);
 
   const filteredBatches = useMemo(() => {
-    return batches.map(b => {
-      // Find matching mock values for associated info (to look good)
-      const fallback = defaultBatches.find(db => db.batchName === b.batchName) || {
-        courseName: 'General Programming',
-        teacher: 'Mr. Kasun Jayasuriya',
-        studentCount: 20,
-        status: 'Active'
-      };
-      return {
-        ...b,
-        courseName: fallback.courseName,
-        teacher: fallback.teacher,
-        studentCount: fallback.studentCount,
-        status: fallback.status
-      };
-    }).filter(b => 
+    return batches.filter(b => 
       b.batchName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.courseName.toLowerCase().includes(searchQuery.toLowerCase())
+      (b.courseName && b.courseName.toLowerCase().includes(searchQuery.toLowerCase()))
     );
-  }, [batches, searchQuery, defaultBatches]);
+  }, [batches, searchQuery]);
 
   const filteredInquiries = useMemo(() => {
     let list = inquiries.map((inq, index) => {
@@ -255,15 +193,7 @@ export const CoursesCalendars: React.FC = () => {
       alert('Course registry created successfully!');
     } catch (err: any) {
       console.error(err);
-      // Sandbox fallback mode
-      const sandboxCreated = {
-        courseId: 'C' + (courses.length + 1),
-        ...courseForm
-      };
-      setCourses(prev => [...prev, sandboxCreated]);
-      setShowCourseModal(false);
-      setCourseForm({ courseName: '', credits: 3, durationWeeks: 12, description: '' });
-      alert('Network simulation fallback: Course added locally.');
+      alert('Failed to register course in database.');
     } finally {
       setSubmitting(false);
     }
@@ -288,14 +218,7 @@ export const CoursesCalendars: React.FC = () => {
       alert('Batch planner created successfully!');
     } catch (err: any) {
       console.error(err);
-      const sandboxCreated = {
-        batchId: 'bat-' + (batches.length + 1),
-        ...batchForm
-      };
-      setBatches(prev => [...prev, sandboxCreated]);
-      setShowBatchModal(false);
-      setBatchForm({ batchName: '', startDate: '', endDate: '' });
-      alert('Network simulation fallback: Batch added locally.');
+      alert('Failed to save batch planner.');
     } finally {
       setSubmitting(false);
     }
@@ -321,14 +244,7 @@ export const CoursesCalendars: React.FC = () => {
       alert('Calendar event created successfully!');
     } catch (err: any) {
       console.error(err);
-      const sandboxCreated = {
-        calendarId: 'evt-' + (events.length + 1),
-        ...eventForm
-      };
-      setEvents(prev => [...prev, sandboxCreated]);
-      setShowEventModal(false);
-      setEventForm({ eventName: '', eventDate: '', description: '', status: 'CLASS' });
-      alert('Network simulation fallback: Event added locally.');
+      alert('Failed to schedule calendar event.');
     } finally {
       setSubmitting(false);
     }
@@ -354,15 +270,7 @@ export const CoursesCalendars: React.FC = () => {
       alert('Admissions inquiry registered successfully!');
     } catch (err: any) {
       console.error(err);
-      const sandboxCreated = {
-        ...inquiryForm,
-        inquiryId: 'inq-' + (inquiries.length + 1),
-        inquiryDate: inquiryForm.inquiryDate || new Date().toISOString().split('T')[0]
-      };
-      setInquiries(prev => [...prev, sandboxCreated]);
-      setShowInquiryModal(false);
-      setInquiryForm({ applicantName: '', contactInfo: '', status: 'New', inquiryDate: '' });
-      alert('Network simulation fallback: Inquiry registered locally.');
+      alert('Failed to register admissions inquiry.');
     } finally {
       setSubmitting(false);
     }
@@ -398,19 +306,6 @@ export const CoursesCalendars: React.FC = () => {
   };
 
   // --- Delete Handlers ---
-  const handleDeleteCourse = async (courseId: string, courseName: string) => {
-    const confirmed = window.confirm(`Are you sure you want to delete course "${courseName}"?`);
-    if (!confirmed) return;
-    try {
-      await courseService.deleteCourse(courseId);
-      setCourses(prev => prev.filter(c => c.courseId !== courseId));
-      alert('Course registry deleted successfully.');
-    } catch (err: any) {
-      console.error(err);
-      setCourses(prev => prev.filter(c => c.courseId !== courseId));
-      alert('Course registry deleted successfully.');
-    }
-  };
 
   const handleDeleteBatch = async (batchId: string, batchName: string) => {
     const confirmed = window.confirm(`Are you sure you want to delete batch "${batchName}"?`);
@@ -445,7 +340,8 @@ export const CoursesCalendars: React.FC = () => {
     { id: 'courses', label: 'Course Registry' },
     { id: 'batches', label: 'Batches Planner' },
     { id: 'calendar', label: 'Academic Calendar' },
-    { id: 'admissions', label: 'Admissions Inquiries' }
+    { id: 'admissions', label: 'Admissions Inquiries' },
+    { id: 'access', label: 'Course Access Control' }
   ];
 
   const handleTabChange = (tabId: string) => {
@@ -454,25 +350,24 @@ export const CoursesCalendars: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-3 p-4 bg-rose-50 border border-rose-250 rounded-2xl text-rose-800 text-sm animate-in fade-in duration-200">
-          <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
-          <p className="font-medium">{error}</p>
-        </div>
+        <Alert variant="destructive" className="animate-in fade-in duration-200">
+          <AlertCircle className="h-5 w-5 text-rose-500 mt-0.5 shrink-0" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {/* Header Panel */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#E9EDF5] pb-6">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">Courses & Batches Desk</h1>
+          <h1 className="text-[18px] md:text-xl lg:text-2xl font-semibold text-slate-800 tracking-tight">Courses & Batches Desk</h1>
           <p className="text-slate-500 text-sm mt-1">
-            Configure institutional courses, batches, academic calendars, and admissions.
+            Configure institutional courses, batches, academic calendars, admissions, and course access.
           </p>
         </div>
         <div>
           {activeTab === 'courses' && (
-            <Button variant="solid" color="primary" onClick={() => setShowCourseModal(true)} startIcon={<Plus className="h-4.5 w-4.5" />}>
+            <Button variant="solid" color="primary" onClick={() => navigate('/admin/courses/new')} startIcon={<Plus className="h-4.5 w-4.5" />}>
               Add Course
             </Button>
           )}
@@ -536,67 +431,54 @@ export const CoursesCalendars: React.FC = () => {
               </div>
             </div>
 
-            {/* Courses Table */}
-            <div className="bg-white border border-[#E9EDF5] rounded-2xl overflow-hidden shadow-sm">
+            {/* Courses Cards Grid */}
+            <div>
               {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 gap-3">
+                <div className="bg-white border border-[#E9EDF5] rounded-2xl shadow-sm flex flex-col items-center justify-center py-20 gap-3">
                   <Loader2 className="h-8 w-8 text-[#4F3FF0] animate-spin" />
                   <p className="text-slate-500 font-medium text-sm">Loading course catalog...</p>
                 </div>
               ) : filteredCourses.length === 0 ? (
-                <div className="text-center py-20">
+                <div className="bg-white border border-[#E9EDF5] rounded-2xl shadow-sm text-center py-20">
                   <h3 className="font-bold text-slate-700">No courses found</h3>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse text-left">
-                    <thead>
-                      <tr className="bg-[#F8FAFC]/50 border-b border-[#E9EDF5] text-slate-450 text-[10px] font-extrabold tracking-wider uppercase">
-                        <th className="px-6 py-4">COURSE ID</th>
-                        <th className="px-6 py-4 w-1/2">COURSE TITLE NAME</th>
-                        <th className="px-6 py-4">CREDITS</th>
-                        <th className="px-6 py-4">DURATION</th>
-                        <th className="px-6 py-4">ACTIVE BATCHES</th>
-                        <th className="px-6 py-4 text-right">ACTIONS</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#E9EDF5]">
-                      {filteredCourses.map(course => (
-                        <tr key={course.courseId} className="hover:bg-slate-50/30 transition-colors duration-150">
-                          <td className="px-6 py-4.5 font-bold text-[#4F3FF0] text-sm">
-                            {course.courseId}
-                          </td>
-                          <td className="px-6 py-4.5">
-                            <p className="font-extrabold text-slate-800 text-sm">{course.courseName}</p>
-                            <p className="text-slate-500 text-xs mt-1 font-medium leading-relaxed">{course.description}</p>
-                          </td>
-                          <td className="px-6 py-4.5 font-bold text-slate-800 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredCourses.map(course => (
+                    <div 
+                      key={course.courseId} 
+                      className="bg-white border border-[#E9EDF5] hover:border-[#4F3FF0]/40 p-6 rounded-3xl shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between text-left"
+                    >
+                      <div className="space-y-3">
+                        <div>
+                          <span className="text-[9px] font-black text-[#4F3FF0] uppercase tracking-widest bg-[#4F3FF0]/6 px-2.5 py-0.75 rounded-md select-none">
+                            {getBatchNameForCourse(course.courseId, course.courseName)}
+                          </span>
+                        </div>
+                        <Link
+                          to={`/admin/courses/${course.courseId}`}
+                          className="font-black text-slate-800 text-base hover:text-[#4F3FF0] hover:underline transition-colors block leading-snug"
+                        >
+                          {course.courseName}
+                        </Link>
+                        <p className="text-slate-500 text-xs font-semibold leading-relaxed line-clamp-4">
+                          {course.description}
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <div className="h-px bg-slate-100 my-4" />
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-extrabold text-[#4F3FF0] bg-[#4F3FF0]/5 px-3 py-1 rounded-xl">
                             {course.credits} Credits
-                          </td>
-                          <td className="px-6 py-4.5 text-slate-500 text-sm font-medium">
+                          </span>
+                          <span className="text-slate-400 font-bold">
                             {course.durationWeeks} Weeks
-                          </td>
-                          <td className="px-6 py-4.5 text-slate-800 font-bold text-sm pl-12">
-                            {course.courseId === 'crs-1' || course.courseId === 'crs-2' ? '2' : '1'}
-                          </td>
-                          <td className="px-6 py-4.5 text-right">
-                            <div className="flex justify-end gap-2">
-                              <button className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-[#4F3FF0] rounded-lg transition-colors cursor-not-allowed" disabled>
-                                <Edit2 className="h-4 w-4" />
-                              </button>
-                              <button 
-                                onClick={() => handleDeleteCourse(course.courseId, course.courseName)}
-                                className="p-1.5 hover:bg-rose-50 text-slate-450 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
-                                title="Delete Course"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -622,88 +504,83 @@ export const CoursesCalendars: React.FC = () => {
               </div>
             </div>
 
-            {/* Batches Table */}
-            <div className="bg-white border border-[#E9EDF5] rounded-2xl overflow-hidden shadow-sm">
-              {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 gap-3">
-                  <Loader2 className="h-8 w-8 text-[#4F3FF0] animate-spin" />
-                  <p className="text-slate-500 font-medium text-sm">Loading batch schedule...</p>
-                </div>
-              ) : filteredBatches.length === 0 ? (
-                <div className="text-center py-20">
-                  <h3 className="font-bold text-slate-700">No batches found</h3>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse text-left">
-                    <thead>
-                      <tr className="bg-[#F8FAFC]/50 border-b border-[#E9EDF5] text-slate-450 text-[10px] font-extrabold tracking-wider uppercase">
-                        <th className="w-10 px-6 py-4"></th>
-                        <th className="px-6 py-4">BATCH NAME</th>
-                        <th className="px-6 py-4">ASSOCIATED COURSES</th>
-                        <th className="px-6 py-4">TEACHER</th>
-                        <th className="px-6 py-4">STUDENT COUNT</th>
-                        <th className="px-6 py-4">STATUS</th>
-                        <th className="px-6 py-4">TIMELINE</th>
-                        <th className="px-6 py-4 text-right">ACTIONS</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#E9EDF5]">
-                      {filteredBatches.map(batch => (
-                        <tr key={batch.batchId} className="hover:bg-slate-50/30 transition-colors duration-150">
-                          <td className="px-6 py-4.5 text-slate-400">
-                            <ChevronRight className="h-4 w-4" />
-                          </td>
-                          <td className="px-6 py-4.5 font-bold text-slate-800 text-sm">
-                            {batch.batchName}
-                          </td>
-                          <td className="px-6 py-4.5">
-                            <span className="inline-flex items-center px-3 py-1 bg-indigo-50/60 text-[#4F3FF0] text-xs font-semibold rounded-full border border-indigo-100">
-                              {batch.courseName}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4.5 text-slate-700 font-semibold text-sm">
-                            {batch.teacher}
-                          </td>
-                          <td className="px-6 py-4.5 text-slate-800 font-bold text-sm">
-                            {batch.studentCount} students
-                          </td>
-                          <td className="px-6 py-4.5">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 border text-xs font-semibold rounded-full ${
-                              batch.status === 'Finished' 
-                                ? 'bg-slate-50 text-slate-500 border-slate-200'
-                                : batch.status === 'Pending'
-                                ? 'bg-amber-50 text-amber-600 border-amber-200'
-                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            }`}>
-                              {batch.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4.5 text-slate-400 text-xs font-medium whitespace-nowrap">
-                            {batch.startDate} to <br /> {batch.endDate}
-                          </td>
-                          <td className="px-6 py-4.5 text-right">
-                            <div className="flex justify-end items-center gap-3">
-                              <span className="text-xs font-bold text-[#4F3FF0] hover:underline cursor-pointer select-none">View &gt;</span>
-                              <button className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-[#4F3FF0] rounded-lg transition-colors cursor-not-allowed" disabled>
-                                <Edit2 className="h-4 w-4" />
-                              </button>
-                              <button 
-                                onClick={() => handleDeleteBatch(batch.batchId, batch.batchName)}
-                                className="p-1.5 hover:bg-rose-50 text-slate-450 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
-                                title="Delete Batch"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+            {/* Batches Cards Grid */}
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-3 bg-white border border-[#E9EDF5] rounded-2xl shadow-sm">
+                <Loader2 className="h-8 w-8 text-[#4F3FF0] animate-spin" />
+                <p className="text-slate-500 font-medium text-sm">Loading batch schedule...</p>
+              </div>
+            ) : filteredBatches.length === 0 ? (
+              <div className="text-center py-20 bg-white border border-[#E9EDF5] rounded-2xl shadow-sm">
+                <h3 className="font-bold text-slate-700">No batches found</h3>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredBatches.map(batch => (
+                  <div 
+                    key={batch.batchId} 
+                    className="bg-white border border-[#E9EDF5] rounded-2xl p-5 hover:shadow-md hover:border-slate-350 transition-all flex flex-col justify-between"
+                  >
+                    <div>
+                      {/* Card Header: Name and Status */}
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100/60">
+                        <span className="font-black text-slate-800 text-base">
+                          {batch.batchName}
+                        </span>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 border text-[9px] font-black uppercase tracking-wider rounded-full ${
+                          batch.status === 'Finished' 
+                            ? 'bg-slate-50 text-slate-500 border-slate-200'
+                            : batch.status === 'Pending'
+                            ? 'bg-amber-50 text-amber-600 border-amber-200'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        }`}>
+                          {batch.status}
+                        </span>
+                      </div>
+
+                      {/* Associated Course Badge */}
+                      <div className="mt-3">
+                        <span className="inline-flex items-center px-3 py-1 bg-indigo-50/60 text-[#4F3FF0] text-[10px] font-black uppercase tracking-wider rounded-full border border-indigo-100/50">
+                          {batch.courseName}
+                        </span>
+                      </div>
+
+                      {/* Detail Statistics List */}
+                      <div className="space-y-2.5 mt-4 text-xs font-bold text-slate-650">
+                        <div className="flex justify-between items-center pb-1 border-b border-slate-100/60">
+                          <span className="text-slate-400 font-extrabold text-[9px] uppercase tracking-wider">Student Count</span>
+                          <span className="text-slate-850 font-black text-xs">{batch.studentCount} students</span>
+                        </div>
+                        <div className="flex justify-between items-center pb-1 border-b border-slate-100/60">
+                          <span className="text-slate-400 font-extrabold text-[9px] uppercase tracking-wider">Start Date</span>
+                          <span className="text-slate-700">{batch.startDate}</span>
+                        </div>
+                        {batch.status === 'Finished' && (
+                          <div className="flex justify-between items-center pb-1 border-b border-slate-100/60">
+                            <span className="text-slate-450 font-extrabold text-[9px] uppercase tracking-wider">End Date</span>
+                            <span className="text-slate-700">{batch.endDate}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Actions Panel */}
+                    <div className="flex justify-between items-center mt-5 pt-3 border-t border-slate-100">
+                      <span className="text-[10px] font-black text-[#4F3FF0] hover:underline cursor-pointer select-none uppercase tracking-wider">Edit Details</span>
+                      <div className="flex items-center gap-1.5">
+                        <button 
+                          onClick={() => handleDeleteBatch(batch.batchId, batch.batchName)}
+                          className="p-1.5 hover:bg-rose-50 text-slate-450 hover:text-rose-600 rounded-xl transition-all cursor-pointer"
+                          title="Delete Batch"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -959,6 +836,10 @@ export const CoursesCalendars: React.FC = () => {
               )}
             </div>
           </div>
+        )}
+        {/* --- TAB 5: COURSE ACCESS CONTROL --- */}
+        {activeTab === 'access' && (
+          <CourseAccess hideHeader />
         )}
 
       </div>

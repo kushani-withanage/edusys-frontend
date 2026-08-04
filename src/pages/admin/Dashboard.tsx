@@ -1,93 +1,65 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Users, 
-  GraduationCap, 
-  CreditCard, 
-  Calendar, 
-  Clock, 
-  ArrowUpRight, 
-  Award, 
+import {
+  Users,
+  GraduationCap,
+  CreditCard,
+  Calendar,
+  Clock,
+  ArrowUpRight,
+  Award,
   ExternalLink,
-  AlertCircle
+  AlertCircle,
+  X
 } from 'lucide-react';
 import Button from '@/components/common/Button';
 import { api } from '@/utils/api';
-
-interface Student {
-  studentId: string;
-  fullName: string;
-  email: string;
-  phone: string;
-  status: string;
-  createdAt: string;
-  address: string;
-  regNo: string;
-  enrollmentDate: string;
-  dob: string;
-}
-
-interface Teacher {
-  teacherId: string;
-  fullName: string;
-  email: string;
-  phone: string;
-  status: string;
-  createdAt: string;
-  specialization: string;
-  joinDate: string;
-}
-
-interface Batch {
-  batchId: string;
-  batchName: string;
-  startDate: string;
-  endDate: string;
-}
-
-interface FeeRecord {
-  feeId: string;
-  studentId: string;
-  amount: number;
-  dueDate: string;
-  feeType: string;
-  status: string;
-}
-
-interface Enrollment {
-  enrollmentId: string;
-  studentId: string;
-  batchId: string;
-  courseId: string;
-  enrollDate: string;
-}
-
-interface Course {
-  courseId: string;
-  courseName: string;
-  credits: number;
-  durationWeeks: number;
-  description: string;
-}
-
-interface Receipt {
-  receiptId: string;
-  receiptNo: string;
-  feeId: string;
-  paymentDate: string;
-  amountPaid: number;
-  paymentMethod: string;
-}
+import { useAuth } from '../../hooks/useAuth';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import type { Student, Batch, FeeRecord, Enrollment, Course, Receipt } from '@/interfaces';
 
 const Dashboard: React.FC = () => {
+  const { user } = useAuth();
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const getGreeting = () => {
+    const hour = currentTime.getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 18) return 'Good Afternoon';
+    return 'Good Evening';
+  };
+
+  interface DashboardStats {
+    totalStudents: number;
+    totalTeachers: number;
+    activeBatchesCount: number;
+    newAdmissionIntake: number;
+    overduePaymentsCount: number;
+    pendingPaymentsCount: number;
+  }
+
   const [students, setStudents] = useState<Student[]>([]);
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [feeRecords, setFeeRecords] = useState<FeeRecord[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showError, setShowError] = useState(false);
+
+  useEffect(() => {
+    if (error) {
+      setShowError(true);
+    }
+  }, [error]);
 
   useEffect(() => {
     async function fetchDashboardData() {
@@ -95,29 +67,29 @@ const Dashboard: React.FC = () => {
         setLoading(true);
         const [
           studentsData,
-          teachersData,
           batchesData,
           feeRecordsData,
           enrollmentsData,
           coursesData,
-          receiptsData
+          receiptsData,
+          statsData
         ] = await Promise.all([
           api.get<Student[]>('/api/v1/students'),
-          api.get<Teacher[]>('/api/v1/teachers'),
           api.get<Batch[]>('/api/v1/batches'),
           api.get<FeeRecord[]>('/api/v1/fee-records'),
           api.get<Enrollment[]>('/api/v1/enrollments'),
           api.get<Course[]>('/api/v1/courses'),
-          api.get<Receipt[]>('/api/v1/receipts')
+          api.get<Receipt[]>('/api/v1/receipts'),
+          api.get<DashboardStats>('/api/v1/dashboard/stats')
         ]);
 
         setStudents(studentsData);
-        setTeachers(teachersData);
         setBatches(batchesData);
         setFeeRecords(feeRecordsData);
         setEnrollments(enrollmentsData);
         setCourses(coursesData);
         setReceipts(receiptsData);
+        setDashboardStats(statsData);
         setError(null);
       } catch (err: any) {
         console.error('Error fetching dashboard metrics:', err);
@@ -130,21 +102,7 @@ const Dashboard: React.FC = () => {
     fetchDashboardData();
   }, []);
 
-  // 1. Calculate Active Batches
-  const activeBatches = useMemo(() => {
-    const today = new Date();
-    return batches.filter(batch => {
-      if (!batch.startDate || !batch.endDate) return false;
-      const start = new Date(batch.startDate);
-      const end = new Date(batch.endDate);
-      return today >= start && today <= end;
-    });
-  }, [batches]);
 
-  // 2. Filter Pending & Overdue fee payments
-  const pendingFeeRecords = useMemo(() => {
-    return feeRecords.filter(r => r.status === 'PENDING');
-  }, [feeRecords]);
 
   const overdueFeeRecords = useMemo(() => {
     return feeRecords.filter(r => r.status === 'UNPAID');
@@ -165,8 +123,8 @@ const Dashboard: React.FC = () => {
     const count = students.filter(s => {
       if (!s.enrollmentDate) return false;
       const date = new Date(s.enrollmentDate);
-      return date.getMonth() === latestDateObj.getMonth() && 
-             date.getFullYear() === latestDateObj.getFullYear();
+      return date.getMonth() === latestDateObj.getMonth() &&
+        date.getFullYear() === latestDateObj.getFullYear();
     }).length;
 
     const label = latestDateObj.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
@@ -185,7 +143,7 @@ const Dashboard: React.FC = () => {
   const metrics = [
     {
       title: 'TOTAL STUDENTS',
-      value: loading ? '...' : students.length.toString(),
+      value: loading || !dashboardStats ? '...' : dashboardStats.totalStudents.toString(),
       trend: '+8.4% vs last month',
       isPositive: true,
       icon: Users,
@@ -194,7 +152,7 @@ const Dashboard: React.FC = () => {
     },
     {
       title: 'TOTAL TEACHERS',
-      value: loading ? '...' : teachers.length.toString(),
+      value: loading || !dashboardStats ? '...' : dashboardStats.totalTeachers.toString(),
       trend: '+4.2% vs last month',
       isPositive: true,
       icon: Users,
@@ -203,7 +161,7 @@ const Dashboard: React.FC = () => {
     },
     {
       title: 'ACTIVE BATCHES',
-      value: loading ? '...' : activeBatches.length.toString(),
+      value: loading || !dashboardStats ? '...' : dashboardStats.activeBatchesCount.toString(),
       trend: `${batches.length} Total Batches`,
       isPositive: true,
       icon: GraduationCap,
@@ -212,7 +170,7 @@ const Dashboard: React.FC = () => {
     },
     {
       title: 'PENDING FEE PAYMENTS',
-      value: loading ? '...' : pendingFeeRecords.length.toString(),
+      value: loading || !dashboardStats ? '...' : dashboardStats.pendingPaymentsCount.toString(),
       trend: 'Awaiting submission',
       isPositive: true,
       icon: CreditCard,
@@ -221,7 +179,7 @@ const Dashboard: React.FC = () => {
     },
     {
       title: `NEW ADMISSIONS (${admissionsStats.label.toUpperCase()})`,
-      value: loading ? '...' : admissionsStats.count.toString(),
+      value: loading || !dashboardStats ? '...' : dashboardStats.newAdmissionIntake.toString(),
       trend: 'Registered intake',
       isPositive: true,
       icon: Calendar,
@@ -230,9 +188,9 @@ const Dashboard: React.FC = () => {
     },
     {
       title: 'OVERDUE PAYMENTS',
-      value: loading ? '...' : overdueFeeRecords.length.toString(),
+      value: loading || !dashboardStats ? '...' : dashboardStats.overduePaymentsCount.toString(),
       trend: 'Action required',
-      isPositive: overdueFeeRecords.length === 0,
+      isPositive: !dashboardStats || dashboardStats.overduePaymentsCount === 0,
       icon: Clock,
       iconBg: 'bg-rose-50',
       iconColor: 'text-rose-600',
@@ -279,7 +237,7 @@ const Dashboard: React.FC = () => {
   // Course Enrollments Bar Chart Calculations
   const barChartData = useMemo(() => {
     if (courses.length === 0) return [];
-    
+
     const counts = courses.map(course => {
       const count = enrollments.filter(e => e.courseId === course.courseId).length;
       let shortName = course.courseName;
@@ -288,7 +246,7 @@ const Dashboard: React.FC = () => {
       }
       return { name: shortName, count };
     });
-    
+
     return counts.sort((a, b) => b.count - a.count).slice(0, 5);
   }, [courses, enrollments]);
 
@@ -296,7 +254,7 @@ const Dashboard: React.FC = () => {
     const maxCount = Math.max(...barChartData.map(b => b.count), 1);
     const maxBarHeight = 130;
     const baselineY = 190;
-    
+
     return barChartData.map((bar, index) => {
       const height = (bar.count / maxCount) * maxBarHeight;
       const y = baselineY - height;
@@ -311,7 +269,7 @@ const Dashboard: React.FC = () => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const last6Months: Array<{ monthName: string; monthIndex: number; year: number; amount: number }> = [];
     const currentDate = new Date();
-    
+
     for (let i = 5; i >= 0; i--) {
       const d = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
       last6Months.push({
@@ -356,28 +314,58 @@ const Dashboard: React.FC = () => {
   }, [monthlyRevenues]);
 
   const totalCollectedFormatted = useMemo(() => {
-    return new Intl.NumberFormat('en-LK', { 
-      style: 'currency', 
-      currency: 'LKR', 
-      minimumFractionDigits: 0 
+    return new Intl.NumberFormat('en-LK', {
+      style: 'currency',
+      currency: 'LKR',
+      minimumFractionDigits: 0
     }).format(lineChartData.totalCollected);
   }, [lineChartData.totalCollected]);
 
   return (
     <div className="space-y-8 select-none">
-      
-      {/* Header section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold text-[#111111] tracking-tight">Welcome back, Admin Edward</h1>
-          <p className="text-sm font-medium text-[#7E8B9B] mt-1">Monitor academic analytics and career scaling distributions.</p>
+
+      {showError && error && (
+        <div className="fixed top-6 right-6 z-50 w-full max-w-sm animate-in fade-in slide-in-from-right-4 duration-300">
+          <Alert variant="destructive" className="pr-10">
+            <AlertCircle className="h-5 w-5 text-rose-500 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <AlertTitle>Connection Failure</AlertTitle>
+              <AlertDescription>
+                {error}
+              </AlertDescription>
+            </div>
+            <button
+              onClick={() => setShowError(false)}
+              className="absolute top-3 right-3 text-[#7E8B9B] hover:text-[#111111] bg-slate-300/20 hover:bg-slate-300/50 p-1 rounded-lg transition-all cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </Alert>
         </div>
-        {error && (
-          <div className="flex items-center gap-2 bg-rose-50 border border-rose-100 text-rose-600 px-4 py-2.5 rounded-xl text-xs font-semibold">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{error}</span>
+      )}
+
+      {/* Welcome Banner Card */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-[#4F3FF0] via-[#5C4EF2] to-[#7C6EF6] rounded-3xl p-8 text-white shadow-[0_12px_30px_rgba(79,63,240,0.15)] flex flex-col md:flex-row md:items-center justify-between gap-6">
+        {/* Decorative glowing circles */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl pointer-events-none" />
+        <div className="absolute bottom-0 left-1/3 w-48 h-48 bg-white/5 rounded-full blur-2xl pointer-events-none" />
+
+        <div className="relative z-10 space-y-3">
+          <h1 className="text-[18px] md:text-xl lg:text-2xl font-semibold tracking-tight">
+            {getGreeting()}, {user?.fullName || 'Admin'}
+          </h1>
+          <div className="flex flex-wrap items-center gap-3 text-sm font-medium text-white/80">
+            <div className="flex items-center gap-2 bg-white/10 px-3.5 py-1.5 rounded-full backdrop-blur-sm">
+              <Calendar className="h-4 w-4" />
+              <span>{currentTime.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+            </div>
+            <span className="hidden sm:inline text-white/30">|</span>
+            <div className="flex items-center gap-2 bg-white/10 px-3.5 py-1.5 rounded-full backdrop-blur-sm">
+              <Clock className="h-4 w-4" />
+              <span className="tabular-nums">{currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+            </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Metrics Cards Grid */}
@@ -385,8 +373,8 @@ const Dashboard: React.FC = () => {
         {metrics.map((card, idx) => {
           const Icon = card.icon;
           return (
-            <div 
-              key={idx} 
+            <div
+              key={idx}
               className="bg-white rounded-2xl border border-[#E9EDF5] p-6 flex items-center justify-between shadow-[0_8px_30px_rgb(0,0,0,0.01)] hover:shadow-[0_12px_36px_rgba(0,0,0,0.025)] hover:border-slate-350 transition-all duration-300 group"
             >
               <div className="space-y-2.5">
@@ -396,10 +384,9 @@ const Dashboard: React.FC = () => {
                 <span className="block text-3xl font-extrabold text-[#111111] tracking-tight transition-transform duration-300 group-hover:translate-x-0.5">
                   {card.value}
                 </span>
-                <span 
-                  className={`inline-block text-[11px] font-bold ${
-                    card.isPositive ? 'text-emerald-600' : 'text-rose-600'
-                  }`}
+                <span
+                  className={`inline-block text-[11px] font-bold ${card.isPositive ? 'text-emerald-600' : 'text-rose-600'
+                    }`}
                 >
                   {card.trend}
                 </span>
@@ -417,7 +404,7 @@ const Dashboard: React.FC = () => {
         {/* Student Course Enrollments Bar Chart */}
         <div className="bg-white rounded-2xl border border-[#E9EDF5] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.01)] flex flex-col justify-between">
           <div className="mb-4">
-            <h3 className="text-sm font-extrabold text-[#111111] tracking-tight">Student Course Enrollments</h3>
+            <h3 className="text-lg font-semibold text-[#111111] tracking-tight">Student Course Enrollments</h3>
             <p className="text-xs font-medium text-[#7E8B9B] mt-0.5">Total active enrollment breakdown per academic subject</p>
           </div>
           <div className="relative w-full h-[220px]">
@@ -433,7 +420,7 @@ const Dashboard: React.FC = () => {
                     <stop offset="100%" stopColor="#818CF8" />
                   </linearGradient>
                 </defs>
-                
+
                 {/* Dotted grid lines */}
                 <line x1="40" y1="40" x2="480" y2="40" stroke="#F1F5F9" strokeDasharray="3 3" strokeWidth="1" />
                 <line x1="40" y1="90" x2="480" y2="90" stroke="#F1F5F9" strokeDasharray="3 3" strokeWidth="1" />
@@ -443,11 +430,11 @@ const Dashboard: React.FC = () => {
                 {/* Render Dynamic Bars */}
                 {scaledBars.map((bar) => (
                   <g key={bar.name}>
-                    <text x={bar.textX} y={bar.y - 8} textAnchor="middle" className="text-[10px] font-extrabold fill-slate-800">
+                    <text x={bar.textX} y={bar.y - 8} textAnchor="middle" className="text-xs font-semibold fill-slate-800">
                       {bar.count}
                     </text>
                     <rect x={bar.x} y={bar.y} width="30" height={bar.height} rx="4" ry="4" fill="url(#barGrad)" className="hover:opacity-90 transition-opacity cursor-pointer" />
-                    <text x={bar.textX} y="210" textAnchor="middle" className="text-[9px] font-bold fill-slate-500">
+                    <text x={bar.textX} y="210" textAnchor="middle" className="text-xs font-medium fill-slate-500">
                       {bar.name}
                     </text>
                   </g>
@@ -461,7 +448,7 @@ const Dashboard: React.FC = () => {
         <div className="bg-white rounded-2xl border border-[#E9EDF5] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.01)] flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div>
-              <h3 className="text-sm font-extrabold text-[#111111] tracking-tight">Revenue Collections History</h3>
+              <h3 className="text-lg font-semibold text-[#111111] tracking-tight">Revenue Collections History</h3>
               <p className="text-xs font-medium text-[#7E8B9B] mt-0.5">Total fee receipts collected over the last 6 months</p>
             </div>
             <div className="flex items-center gap-1 text-[11px] font-extrabold text-[#4F3FF0] bg-[#4F3FF0]/10 px-2.5 py-1 rounded-lg border border-[#4F3FF0]/10">
@@ -482,7 +469,7 @@ const Dashboard: React.FC = () => {
                     <stop offset="100%" stopColor="#4F3FF0" stopOpacity="0.0" />
                   </linearGradient>
                 </defs>
-                
+
                 {/* Dotted grid lines */}
                 <line x1="50" y1="60" x2="450" y2="60" stroke="#F1F5F9" strokeDasharray="3 3" strokeWidth="1" />
                 <line x1="50" y1="100" x2="450" y2="100" stroke="#F1F5F9" strokeDasharray="3 3" strokeWidth="1" />
@@ -500,11 +487,11 @@ const Dashboard: React.FC = () => {
                   <g key={idx}>
                     <circle cx={p.x} cy={p.y} r="5" fill="#4F3FF0" stroke="#FFFFFF" strokeWidth="2.5" />
                     {p.amount > 0 && (
-                      <text x={p.x} y={p.y - 12} textAnchor="middle" className="text-[9px] font-extrabold fill-slate-800">
+                      <text x={p.x} y={p.y - 12} textAnchor="middle" className="text-xs font-semibold fill-slate-800">
                         {p.amount >= 1000 ? `${(p.amount / 1000).toFixed(0)}k` : p.amount}
                       </text>
                     )}
-                    <text x={p.x} y="200" textAnchor="middle" className="text-[9px] font-bold fill-slate-500">
+                    <text x={p.x} y="200" textAnchor="middle" className="text-xs font-medium fill-slate-500">
                       {p.month}
                     </text>
                   </g>
@@ -522,25 +509,25 @@ const Dashboard: React.FC = () => {
           <div className="bg-white rounded-2xl border border-[#E9EDF5] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.01)] flex flex-col">
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h3 className="text-sm font-extrabold text-[#111111] tracking-tight">Recent Student Admissions</h3>
-                <p className="text-xs font-medium text-[#7E8B9B] mt-0.5">Enrolled student records and their assigned batches</p>
+                <h3 className="text-lg font-semibold text-[#111111] tracking-tight">Recent Student Admissions</h3>
+                <p className="text-xs font-normal text-[#7E8B9B] mt-0.5">Enrolled student records and their assigned batches</p>
               </div>
-              <span className="text-[10px] font-extrabold text-[#4F3FF0] bg-[#4F3FF0]/10 px-2 py-1 rounded-md border border-[#4F3FF0]/10">
+              <span className="text-xs font-medium text-[#4F3FF0] bg-[#4F3FF0]/10 px-2 py-1 rounded-md border border-[#4F3FF0]/10">
                 Admitted
               </span>
             </div>
-            
+
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
+              <table className="w-full text-left border-collapse text-sm font-normal">
                 <thead>
-                  <tr className="border-b border-slate-100 text-slate-400 font-bold">
-                    <th className="pb-3 font-semibold">REG NO</th>
-                    <th className="pb-3 font-semibold">NAME</th>
-                    <th className="pb-3 font-semibold">ENROLLED DATE</th>
-                    <th className="pb-3 font-semibold">BATCH NO</th>
+                  <tr className="border-b border-slate-100 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                    <th className="pb-3">REG NO</th>
+                    <th className="pb-3">NAME</th>
+                    <th className="pb-3">ENROLLED DATE</th>
+                    <th className="pb-3">BATCH NO</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
+                <tbody className="divide-y divide-slate-50 text-slate-700 font-normal">
                   {students.slice(-5).reverse().map((student) => (
                     <tr key={student.studentId} className="hover:bg-slate-50/50 transition-colors">
                       <td className="py-3 font-mono font-bold text-slate-550">{student.regNo || 'N/A'}</td>
@@ -549,7 +536,7 @@ const Dashboard: React.FC = () => {
                         {student.enrollmentDate ? new Date(student.enrollmentDate).toLocaleDateString('en-US', { dateStyle: 'medium' }) : 'N/A'}
                       </td>
                       <td className="py-3">
-                        <span className="inline-block px-2 py-0.5 bg-[#4F3FF0]/8 text-[#4F3FF0] rounded-md font-bold text-[10px]">
+                        <span className="inline-block px-2 py-0.5 bg-[#4F3FF0]/8 text-[#4F3FF0] rounded-md font-medium text-xs">
                           {getStudentBatchName(student.studentId)}
                         </span>
                       </td>
@@ -569,31 +556,31 @@ const Dashboard: React.FC = () => {
           <div className="bg-white rounded-2xl border border-[#E9EDF5] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.01)] flex flex-col">
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h3 className="text-sm font-extrabold text-[#111111] tracking-tight">Overdue Payments</h3>
-                <p className="text-xs font-medium text-[#7E8B9B] mt-0.5">Unpaid tuition fee records and outstanding balances</p>
+                <h3 className="text-lg font-semibold text-[#111111] tracking-tight">Overdue Payments</h3>
+                <p className="text-xs font-normal text-[#7E8B9B] mt-0.5">Unpaid tuition fee records and outstanding balances</p>
               </div>
-              <span className="text-[10px] font-extrabold text-rose-600 bg-rose-50 px-2 py-1 rounded-md border border-rose-100">
+              <span className="text-xs font-medium text-rose-600 bg-rose-50 px-2 py-1 rounded-md border border-rose-100">
                 Pending
               </span>
             </div>
-            
+
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
+              <table className="w-full text-left border-collapse text-sm font-normal">
                 <thead>
-                  <tr className="border-b border-slate-100 text-slate-400 font-bold">
-                    <th className="pb-3 font-semibold">STUDENT</th>
-                    <th className="pb-3 font-semibold">FEE DETAILS</th>
-                    <th className="pb-3 font-semibold">DUE DATE</th>
-                    <th className="pb-3 font-semibold text-right">AMOUNT (LKR)</th>
+                  <tr className="border-b border-slate-100 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                    <th className="pb-3">STUDENT</th>
+                    <th className="pb-3">FEE DETAILS</th>
+                    <th className="pb-3">DUE DATE</th>
+                    <th className="pb-3 text-right">AMOUNT (LKR)</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
+                <tbody className="divide-y divide-slate-50 text-slate-700 font-normal">
                   {overdueFeeRecords.map((record) => {
                     const student = students.find(s => s.studentId === record.studentId);
-                    const formattedAmount = new Intl.NumberFormat('en-LK', { 
-                      style: 'currency', 
-                      currency: 'LKR', 
-                      minimumFractionDigits: 0 
+                    const formattedAmount = new Intl.NumberFormat('en-LK', {
+                      style: 'currency',
+                      currency: 'LKR',
+                      minimumFractionDigits: 0
                     }).format(record.amount);
                     return (
                       <tr key={record.feeId} className="hover:bg-slate-50/50 transition-colors">
@@ -624,8 +611,8 @@ const Dashboard: React.FC = () => {
         <div className="bg-white rounded-2xl border border-[#E9EDF5] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.01)] flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-sm font-extrabold text-[#111111] tracking-tight">Career Scale Level Distribution</h3>
-              <p className="text-xs font-medium text-[#7E8B9B] mt-0.5">Total student counts across professional levels</p>
+              <h3 className="text-lg font-semibold text-[#111111] tracking-tight">Career Scale Level Distribution</h3>
+              <p className="text-xs font-normal text-[#7E8B9B] mt-0.5">Total student counts across professional levels</p>
             </div>
             <Award className="h-5 w-5 text-amber-500" />
           </div>
@@ -635,25 +622,25 @@ const Dashboard: React.FC = () => {
             <div className="relative w-40 h-40 shrink-0">
               <svg viewBox="0 0 200 200" className="w-full h-full transform -rotate-90">
                 {donutChartSegments.map((segment, idx) => (
-                  <circle 
+                  <circle
                     key={idx}
-                    cx="100" 
-                    cy="100" 
-                    r="70" 
-                    fill="transparent" 
-                    stroke={segment.stroke} 
-                    strokeWidth="16" 
-                    strokeDasharray={segment.strokeDasharray} 
-                    strokeDashoffset={segment.strokeDashoffset} 
+                    cx="100"
+                    cy="100"
+                    r="70"
+                    fill="transparent"
+                    stroke={segment.stroke}
+                    strokeWidth="16"
+                    strokeDasharray={segment.strokeDasharray}
+                    strokeDashoffset={segment.strokeDashoffset}
                   />
                 ))}
               </svg>
               {/* Inner Circle Label */}
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                <span className="text-2xl font-extrabold text-[#111111] leading-none">
+                <span className="text-2xl font-semibold text-[#111111] leading-none">
                   {loading ? '...' : students.length.toString()}
                 </span>
-                <span className="text-[9px] font-bold text-[#7E8B9B] tracking-wider uppercase mt-1">STUDENTS</span>
+                <span className="text-xs font-medium text-[#7E8B9B] tracking-wider uppercase mt-1">STUDENTS</span>
               </div>
             </div>
 
@@ -675,8 +662,8 @@ const Dashboard: React.FC = () => {
         {/* System Actions Needed */}
         <div className="bg-white rounded-2xl border border-[#E9EDF5] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.01)] flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-extrabold text-[#111111] tracking-tight">System Actions Needed</h3>
-            <span className="text-[10px] font-extrabold text-[#4F3FF0] bg-[#4F3FF0]/10 px-2 py-1 rounded-md border border-[#4F3FF0]/10">
+            <h3 className="text-lg font-semibold text-[#111111] tracking-tight">System Actions Needed</h3>
+            <span className="text-xs font-medium text-[#4F3FF0] bg-[#4F3FF0]/10 px-2 py-1 rounded-md border border-[#4F3FF0]/10">
               {loading ? '...' : (overdueFeeRecords.length > 0 ? '1 Pending' : '0 Pending')}
             </span>
           </div>
@@ -686,10 +673,10 @@ const Dashboard: React.FC = () => {
             <div className="flex items-start gap-3.5 p-3 rounded-xl hover:bg-slate-50 transition-colors">
               <span className={`h-2 w-2 rounded-full shrink-0 mt-1.5 ${overdueFeeRecords.length > 0 ? 'bg-rose-500' : 'bg-slate-300'}`} />
               <div className="space-y-0.5">
-                <h4 className="text-xs font-bold text-slate-800 leading-tight">
+                <h4 className="text-xs font-semibold text-slate-800 leading-tight">
                   {overdueFeeRecords.length > 0 ? `Review ${overdueFeeRecords.length} outstanding fee payments` : 'All payments up to date'}
                 </h4>
-                <p className="text-[10px] text-slate-400 font-medium leading-none">
+                <p className="text-xs text-slate-400 font-normal leading-none">
                   {overdueFeeRecords.length > 0 ? 'Overdue payments detected in active batches' : 'No overdue accounts found'}
                 </p>
               </div>
@@ -699,8 +686,8 @@ const Dashboard: React.FC = () => {
             <div className="flex items-start gap-3.5 p-3 rounded-xl hover:bg-slate-50 transition-colors">
               <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0 mt-1.5" />
               <div className="space-y-0.5">
-                <h4 className="text-xs font-bold text-slate-800 leading-tight">Monitor active batch registrations</h4>
-                <p className="text-[10px] text-slate-400 font-medium leading-none">
+                <h4 className="text-xs font-semibold text-slate-800 leading-tight">Monitor active batch registrations</h4>
+                <p className="text-xs text-slate-400 font-normal leading-none">
                   {batches.length} total cohorts currently loaded in system database
                 </p>
               </div>
@@ -710,8 +697,8 @@ const Dashboard: React.FC = () => {
             <div className="flex items-start gap-3.5 p-3 rounded-xl hover:bg-slate-50 transition-colors">
               <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0 mt-1.5" />
               <div className="space-y-0.5">
-                <h4 className="text-xs font-bold text-slate-800 leading-tight">Audit Career scale reviews count</h4>
-                <p className="text-[10px] text-slate-400 font-medium leading-none">Syncing student progress records with active reviewer panels</p>
+                <h4 className="text-xs font-semibold text-slate-800 leading-tight">Audit Career scale reviews count</h4>
+                <p className="text-xs text-slate-400 font-normal leading-none">Syncing student progress records with active reviewer panels</p>
               </div>
             </div>
           </div>
@@ -725,34 +712,34 @@ const Dashboard: React.FC = () => {
       {/* Bottom Section: Milestones */}
       <div className="bg-white rounded-2xl border border-[#E9EDF5] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.01)] space-y-5">
         <div>
-          <h3 className="text-sm font-extrabold text-[#111111] tracking-tight">Upcoming Academic & Batch Milestones</h3>
-          <p className="text-xs font-medium text-[#7E8B9B] mt-0.5">Scheduled calendar events, exam timetables, and admissions intakes</p>
+          <h3 className="text-lg font-semibold text-[#111111] tracking-tight">Upcoming Academic & Batch Milestones</h3>
+          <p className="text-xs font-normal text-[#7E8B9B] mt-0.5">Scheduled calendar events, exam timetables, and admissions intakes</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {/* Card 1 */}
           <div className="bg-[#F8FAFC] border border-[#E2E8F0]/80 rounded-xl p-4.5 space-y-2">
-            <span className="block text-[8px] font-extrabold text-slate-400 tracking-wider uppercase">BATCHES INCEPTION</span>
-            <h4 className="text-xs font-extrabold text-slate-800 leading-tight">FSW-2026-C (Web Development)</h4>
-            <p className="text-[11px] font-medium text-slate-500 leading-relaxed">
+            <span className="block text-xs font-semibold text-slate-400 tracking-wider uppercase">BATCHES INCEPTION</span>
+            <h4 className="text-xs font-semibold text-slate-800 leading-tight">FSW-2026-C (Web Development)</h4>
+            <p className="text-xs font-normal text-slate-500 leading-relaxed">
               Starts next Monday. Instructor: Ada Lovelace. 30 registered students.
             </p>
           </div>
 
           {/* Card 2 */}
           <div className="bg-[#F8FAFC] border border-[#E2E8F0]/80 rounded-xl p-4.5 space-y-2">
-            <span className="block text-[8px] font-extrabold text-slate-400 tracking-wider uppercase">UPCOMING EXAMS</span>
-            <h4 className="text-xs font-extrabold text-slate-800 leading-tight">Term 1 Assessment: Databases</h4>
-            <p className="text-[11px] font-medium text-slate-500 leading-relaxed">
+            <span className="block text-xs font-semibold text-slate-400 tracking-wider uppercase">UPCOMING EXAMS</span>
+            <h4 className="text-xs font-semibold text-slate-800 leading-tight">Term 1 Assessment: Databases</h4>
+            <p className="text-xs font-normal text-slate-500 leading-relaxed">
               Scheduled for July 20th, 10:00 AM. 1-Hour timed MCQ question pool.
             </p>
           </div>
 
           {/* Card 3 */}
           <div className="bg-[#F8FAFC] border border-[#E2E8F0]/80 rounded-xl p-4.5 space-y-2">
-            <span className="block text-[8px] font-extrabold text-slate-400 tracking-wider uppercase">CAMPUS HOLIDAYS</span>
-            <h4 className="text-xs font-extrabold text-slate-800 leading-tight">Mid-Term Summer Holiday</h4>
-            <p className="text-[11px] font-medium text-slate-500 leading-relaxed">
+            <span className="block text-xs font-semibold text-slate-400 tracking-wider uppercase">CAMPUS HOLIDAYS</span>
+            <h4 className="text-xs font-semibold text-slate-800 leading-tight">Mid-Term Summer Holiday</h4>
+            <p className="text-xs font-normal text-slate-500 leading-relaxed">
               July 25th. All batch programs suspended for campus maintenance.
             </p>
           </div>

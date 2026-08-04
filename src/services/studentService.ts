@@ -2,7 +2,7 @@ import { api } from '@/utils/api';
 import { inquiryService } from './inquiryService';
 
 export const studentService = {
-  async enrollAndActivateStudent(inquiryId: string, fullName: string, email: string) {
+  async enrollAndActivateStudent(inquiryId: string, fullName: string, email: string, gender?: string) {
     // 1. Create user credential account
     const userPayload = {
       fullName: fullName,
@@ -24,7 +24,8 @@ export const studentService = {
       address: 'Colombo, Sri Lanka',
       regNo: 'pr26' + Math.floor(100 + Math.random() * 900) + Math.floor(1000 + Math.random() * 9000),
       enrollmentDate: new Date().toISOString().split('T')[0],
-      dob: '2005-01-01'
+      dob: '2005-01-01',
+      gender: gender || 'MALE'
     };
     await api.post<any>('/api/v1/students', studentPayload);
 

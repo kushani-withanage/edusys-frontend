@@ -14,35 +14,8 @@ import Button from '@/components/common/Button';
 import { reviewService, type CareerSubmissionData } from '@/services/reviewService';
 import { studentService } from '@/services/studentService';
 import { careerTaskService } from '@/services/careerTaskService';
-
-interface Student {
-  studentId: string;
-  fullName: string;
-  email: string;
-}
-
-interface CareerTask {
-  taskId: string;
-  title: string;
-  pointValue: number;
-  rubricCriteria: string;
-}
-
-interface PortfolioSubmission {
-  submissionId: string;
-  taskId: string;
-  studentId: string;
-  status: string; // PENDING, APPROVED, REJECTED
-  submittedFile?: string;
-  submitDate?: string;
-  // Resolved UI fields
-  studentName: string;
-  studentEmail: string;
-  taskTitle: string;
-  targetLevel: string;
-  pointValue: number;
-  feedback?: string;
-}
+import type { Student, CareerTask, PortfolioSubmission } from '@/interfaces';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export const Reviews: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
@@ -238,18 +211,17 @@ export const Reviews: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-3 p-4 bg-rose-50 border border-rose-250 rounded-2xl text-rose-800 text-sm">
-          <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
-          <p className="font-medium">{error}</p>
-        </div>
+        <Alert variant="destructive">
+          <AlertCircle className="h-5 w-5 text-rose-500 mt-0.5 shrink-0" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {/* Header Panel */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#E9EDF5] pb-6">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2 font-heading">
+          <h1 className="text-[18px] md:text-xl lg:text-2xl font-semibold text-slate-800 tracking-tight flex items-center gap-2 font-heading">
             <ClipboardCheck className="h-7 w-7 text-[#4F3FF0]" />
             Review Queue Dashboard
           </h1>

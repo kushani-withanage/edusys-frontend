@@ -4,6 +4,7 @@ import { UserPlus, ArrowLeft, AlertCircle } from 'lucide-react';
 import Button from '@/components/common/Button';
 import TextField from '@/components/common/TextField';
 import { api } from '@/utils/api';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export const AddUser: React.FC = () => {
   const navigate = useNavigate();
@@ -12,7 +13,23 @@ export const AddUser: React.FC = () => {
     email: '',
     password: '',
     phone: '',
-    role: 'STUDENT'
+    role: 'STUDENT',
+    
+    // Student specific
+    address: '',
+    dob: '',
+    enrollmentDate: '',
+    gender: 'MALE',
+    
+    // Teacher specific
+    specialization: '',
+    joinDate: '',
+    
+    // Parent specific
+    occupation: '',
+    
+    // Reviewer specific
+    expertiseArea: ''
   });
   
   const [loading, setLoading] = useState(false);
@@ -53,6 +70,35 @@ export const AddUser: React.FC = () => {
     if (!formData.phone.trim()) {
       errors.phone = 'Phone number is required';
     }
+
+    // Role specific validation
+    if (formData.role === 'STUDENT') {
+      if (!formData.dob) {
+        errors.dob = 'Date of Birth is required';
+      }
+      if (!formData.address.trim()) {
+        errors.address = 'Address is required';
+      }
+      if (!formData.enrollmentDate) {
+        errors.enrollmentDate = 'Enrollment date is required';
+      }
+    } else if (formData.role === 'TEACHER') {
+      if (!formData.specialization.trim()) {
+        errors.specialization = 'Specialization is required';
+      }
+      if (!formData.joinDate) {
+        errors.joinDate = 'Join date is required';
+      }
+    } else if (formData.role === 'PARENT') {
+      if (!formData.occupation.trim()) {
+        errors.occupation = 'Occupation is required';
+      }
+    } else if (formData.role === 'REVIEWER') {
+      if (!formData.expertiseArea.trim()) {
+        errors.expertiseArea = 'Expertise area is required';
+      }
+    }
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -65,14 +111,59 @@ export const AddUser: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // Call authentication register endpoint to create the user with password
-      await api.post('/api/v1/auth/register', {
+      // 1. Call authentication register endpoint to create the user with password
+      const registerRes = await api.post<any>('/api/v1/auth/register', {
         fullName: formData.fullName.trim(),
         email: formData.email.trim(),
         password: formData.password,
         phone: formData.phone.trim(),
         role: formData.role.toUpperCase()
       });
+
+      const newUserId = registerRes.userId;
+
+      // 2. Create the role-specific profile linked to newUserId
+      if (formData.role === 'STUDENT') {
+        await api.post('/api/v1/students', {
+          studentId: newUserId,
+          fullName: formData.fullName.trim(),
+          email: formData.email.trim(),
+          phone: formData.phone.trim(),
+          status: 'ACTIVE',
+          address: formData.address.trim(),
+          dob: formData.dob,
+          enrollmentDate: formData.enrollmentDate,
+          gender: formData.gender
+        });
+      } else if (formData.role === 'TEACHER') {
+        await api.post('/api/v1/teachers', {
+          teacherId: newUserId,
+          fullName: formData.fullName.trim(),
+          email: formData.email.trim(),
+          phone: formData.phone.trim(),
+          status: 'ACTIVE',
+          specialization: formData.specialization.trim(),
+          joinDate: formData.joinDate
+        });
+      } else if (formData.role === 'PARENT') {
+        await api.post('/api/v1/parents', {
+          parentId: newUserId,
+          fullName: formData.fullName.trim(),
+          email: formData.email.trim(),
+          phone: formData.phone.trim(),
+          status: 'ACTIVE',
+          occupation: formData.occupation.trim()
+        });
+      } else if (formData.role === 'REVIEWER') {
+        await api.post('/api/v1/reviewers', {
+          reviewerId: newUserId,
+          fullName: formData.fullName.trim(),
+          email: formData.email.trim(),
+          phone: formData.phone.trim(),
+          status: 'ACTIVE',
+          expertiseArea: formData.expertiseArea.trim()
+        });
+      }
 
       alert('User added successfully!');
       navigate('/admin/users-roles');
@@ -89,6 +180,7 @@ export const AddUser: React.FC = () => {
       {/* Navigation Header */}
       <div className="flex items-center gap-3">
         <button
+          type="button"
           onClick={() => navigate('/admin/users-roles')}
           className="p-2.5 bg-white border border-[#E2E8F0] hover:bg-slate-50 text-slate-600 rounded-xl transition-all duration-200 cursor-pointer shadow-sm"
           title="Back to Users & Roles"
@@ -105,10 +197,10 @@ export const AddUser: React.FC = () => {
 
       {/* Error message */}
       {error && (
-        <div className="flex items-center gap-3 p-4 bg-rose-50 border border-rose-250 rounded-2xl text-rose-800 text-sm animate-in fade-in duration-200">
-          <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
-          <p className="font-medium">{error}</p>
-        </div>
+        <Alert variant="destructive" className="animate-in fade-in duration-200">
+          <AlertCircle className="h-5 w-5 text-rose-500 mt-0.5 shrink-0" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {/* Form Container */}
@@ -152,18 +244,6 @@ export const AddUser: React.FC = () => {
             disabled={loading}
           />
 
-          {/* Phone Number */}
-          <TextField
-            label="Phone Number"
-            name="phone"
-            value={formData.phone}
-            onChange={handleChange}
-            placeholder="e.g. +94 77 123 4567"
-            error={validationErrors.phone}
-            required
-            disabled={loading}
-          />
-
           {/* Role selection */}
           <div className="space-y-1.5 text-left">
             <label className="block text-xs font-bold tracking-wider uppercase select-none text-slate-700">
@@ -183,6 +263,150 @@ export const AddUser: React.FC = () => {
               <option value="PARENT">Parent</option>
             </select>
           </div>
+
+          {/* Phone Number */}
+          <TextField
+            label="Phone Number"
+            name="phone"
+            value={formData.phone}
+            onChange={handleChange}
+            placeholder="e.g. +94 77 123 4567"
+            error={validationErrors.phone}
+            required
+            disabled={loading}
+          />
+
+          {/* Student Specific Fields */}
+          {formData.role === 'STUDENT' && (
+            <div className="pt-4 border-t border-slate-100 space-y-5 animate-in fade-in duration-200">
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#4F3FF0] select-none">Student Information</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Gender */}
+                <div className="space-y-1.5 text-left">
+                  <label className="block text-xs font-bold tracking-wider uppercase select-none text-slate-700">
+                    Gender <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    name="gender"
+                    value={formData.gender}
+                    onChange={handleChange}
+                    disabled={loading}
+                    className="w-full pl-4 pr-10 py-3.5 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-sm text-slate-800 font-medium outline-none transition-all duration-200 focus:bg-white focus:ring-4 focus:ring-[#4F3FF0]/10 cursor-pointer"
+                  >
+                    <option value="MALE">Male</option>
+                    <option value="FEMALE">Female</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
+
+                {/* DOB */}
+                <TextField
+                  label="Date of Birth"
+                  name="dob"
+                  type="date"
+                  value={formData.dob}
+                  onChange={handleChange}
+                  error={validationErrors.dob}
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              {/* Address */}
+              <TextField
+                label="Address"
+                name="address"
+                value={formData.address}
+                onChange={handleChange}
+                placeholder="e.g. 123 Galle Road, Colombo"
+                error={validationErrors.address}
+                required
+                disabled={loading}
+              />
+
+              {/* Enrollment Date */}
+              <TextField
+                label="Enrollment Date"
+                name="enrollmentDate"
+                type="date"
+                value={formData.enrollmentDate}
+                onChange={handleChange}
+                error={validationErrors.enrollmentDate}
+                required
+                disabled={loading}
+              />
+            </div>
+          )}
+
+          {/* Teacher Specific Fields */}
+          {formData.role === 'TEACHER' && (
+            <div className="pt-4 border-t border-slate-100 space-y-5 animate-in fade-in duration-200">
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#4F3FF0] select-none">Teacher Information</h3>
+
+              {/* Specialization */}
+              <TextField
+                label="Specialization"
+                name="specialization"
+                value={formData.specialization}
+                onChange={handleChange}
+                placeholder="e.g. Java Enterprise Development, Database Systems"
+                error={validationErrors.specialization}
+                required
+                disabled={loading}
+              />
+
+              {/* Join Date */}
+              <TextField
+                label="Join Date"
+                name="joinDate"
+                type="date"
+                value={formData.joinDate}
+                onChange={handleChange}
+                error={validationErrors.joinDate}
+                required
+                disabled={loading}
+              />
+            </div>
+          )}
+
+          {/* Parent Specific Fields */}
+          {formData.role === 'PARENT' && (
+            <div className="pt-4 border-t border-slate-100 space-y-5 animate-in fade-in duration-200">
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#4F3FF0] select-none">Parent Information</h3>
+
+              {/* Occupation */}
+              <TextField
+                label="Occupation"
+                name="occupation"
+                value={formData.occupation}
+                onChange={handleChange}
+                placeholder="e.g. Software Engineer, Doctor"
+                error={validationErrors.occupation}
+                required
+                disabled={loading}
+              />
+            </div>
+          )}
+
+          {/* Reviewer Specific Fields */}
+          {formData.role === 'REVIEWER' && (
+            <div className="pt-4 border-t border-slate-100 space-y-5 animate-in fade-in duration-200">
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#4F3FF0] select-none">Reviewer Information</h3>
+
+              {/* Expertise Area */}
+              <TextField
+                label="Expertise Area"
+                name="expertiseArea"
+                value={formData.expertiseArea}
+                onChange={handleChange}
+                placeholder="e.g. Fullstack Developer, DevOps Engineering"
+                error={validationErrors.expertiseArea}
+                required
+                disabled={loading}
+              />
+            </div>
+          )}
 
           {/* Form Action Buttons */}
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E9EDF5] mt-6">

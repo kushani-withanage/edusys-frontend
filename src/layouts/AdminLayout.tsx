@@ -35,7 +35,8 @@ const adminSidebarGroups: SidebarGroup[] = [
           { label: 'Course Registry', path: '/admin/courses-calendars?tab=courses' },
           { label: 'Batches Planner', path: '/admin/courses-calendars?tab=batches' },
           { label: 'Academic Calendar', path: '/admin/courses-calendars?tab=calendar' },
-          { label: 'Admissions Inquiries', path: '/admin/courses-calendars?tab=admissions' }
+          { label: 'Admissions Inquiries', path: '/admin/courses-calendars?tab=admissions' },
+          { label: 'Course Access', path: '/admin/courses-calendars?tab=access' }
         ]
       },
       { label: 'Admissions', path: '/admin/admissions', icon: ClipboardList },

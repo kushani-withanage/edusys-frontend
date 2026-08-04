@@ -18,26 +18,8 @@ import Button from '@/components/common/Button';
 import TextField from '@/components/common/TextField';
 import { inquiryService, type InquiryData } from '@/services/inquiryService';
 import { studentService } from '@/services/studentService';
-
-interface Inquiry {
-  inquiryId: string;
-  applicantName: string;
-  contactInfo: string;
-  status: string; // New, Contacted, Provisionally Enrolled
-  inquiryDate: string;
-}
-
-interface Student {
-  studentId: string;
-  fullName: string;
-  email: string;
-  phone: string;
-  status: string;
-  regNo: string;
-  enrollmentDate: string;
-  dob?: string;
-  address?: string;
-}
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import type { Inquiry, Student } from '@/interfaces';
 
 export const Admissions: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'inquiries' | 'students'>('inquiries');
@@ -68,19 +50,6 @@ export const Admissions: React.FC = () => {
     inquiryDate: ''
   });
 
-  // --- Mock Fallbacks (Sandbox visualization mode) ---
-  const defaultInquiries = useMemo<Inquiry[]>(() => [
-    { inquiryId: 'inq-1', applicantName: 'Sharadha Madusinghe', contactInfo: 'sharadha@gmail.com', status: 'New', inquiryDate: '2026-07-11' },
-    { inquiryId: 'inq-2', applicantName: 'Dilshan Perera', contactInfo: 'dilshan@gmail.com', status: 'New', inquiryDate: '2026-07-10' },
-    { inquiryId: 'inq-3', applicantName: 'Kavindi Samarasinghe', contactInfo: 'kavindi@gmail.com', status: 'Contacted', inquiryDate: '2026-07-05' },
-    { inquiryId: 'inq-4', applicantName: 'Sachin Samarawickrama', contactInfo: 'sachin@gmail.com', status: 'Provisionally Enrolled', inquiryDate: '2026-07-01' }
-  ], []);
-
-  const defaultStudents = useMemo<Student[]>(() => [
-    { studentId: 'usr-1', fullName: 'Nethmi Wijesinghe', email: 'nethmi@gmail.com', phone: '+94771234567', status: 'ACTIVE', regNo: 'pr268924011', enrollmentDate: '2026-06-15' },
-    { studentId: 'usr-2', fullName: 'Ranuka Gamage', email: 'ranuka@gmail.com', phone: '+94779876543', status: 'ACTIVE', regNo: 'pr268924012', enrollmentDate: '2026-06-18' }
-  ], []);
-
   // --- Fetch API data ---
   const fetchAdmissionsData = async () => {
     try {
@@ -96,9 +65,9 @@ export const Admissions: React.FC = () => {
       setStudents(studentsData);
     } catch (err: any) {
       console.error('Error fetching admissions data:', err);
-      setError('Could not connect to backend server. Running in simulated sandbox mode.');
-      setInquiries(defaultInquiries);
-      setStudents(defaultStudents);
+      setError('Could not connect to backend server. Please verify the backend service is running.');
+      setInquiries([]);
+      setStudents([]);
     } finally {
       setLoading(false);
     }
@@ -106,7 +75,7 @@ export const Admissions: React.FC = () => {
 
   useEffect(() => {
     fetchAdmissionsData();
-  }, [defaultInquiries, defaultStudents]);
+  }, []);
 
   // --- Calculations for Dashboard KPI Stats ---
   const totalInquiriesCount = inquiries.length;
@@ -138,7 +107,7 @@ export const Admissions: React.FC = () => {
     return students.filter(student => 
       student.fullName.toLowerCase().includes(studentSearch.toLowerCase()) ||
       student.email.toLowerCase().includes(studentSearch.toLowerCase()) ||
-      student.regNo.toLowerCase().includes(studentSearch.toLowerCase())
+      (student.regNo || '').toLowerCase().includes(studentSearch.toLowerCase())
     );
   }, [students, studentSearch]);
 
@@ -163,18 +132,7 @@ export const Admissions: React.FC = () => {
       alert('Admissions inquiry registered successfully!');
     } catch (err: any) {
       console.error(err);
-      // Fallback
-      const sandboxCreated: Inquiry = {
-        inquiryId: 'inq-' + (inquiries.length + 1),
-        applicantName: inquiryForm.applicantName,
-        contactInfo: inquiryForm.contactInfo,
-        status: inquiryForm.status,
-        inquiryDate: inquiryForm.inquiryDate || new Date().toISOString().split('T')[0]
-      };
-      setInquiries(prev => [sandboxCreated, ...prev]);
-      setShowAddInquiryModal(false);
-      setInquiryForm({ applicantName: '', contactInfo: '', status: 'New', inquiryDate: '' });
-      alert('Simulation: Inquiry registered locally.');
+      alert('Failed to register inquiry in database.');
     } finally {
       setSubmitting(false);
     }
@@ -210,16 +168,7 @@ export const Admissions: React.FC = () => {
       alert('Admissions inquiry updated successfully!');
     } catch (err: any) {
       console.error(err);
-      // Fallback
-      setInquiries(prev => prev.map(item => item.inquiryId === selectedInquiry.inquiryId ? {
-        ...item,
-        applicantName: inquiryForm.applicantName,
-        contactInfo: inquiryForm.contactInfo,
-        status: inquiryForm.status,
-        inquiryDate: inquiryForm.inquiryDate
-      } : item));
-      setShowEditInquiryModal(false);
-      alert('Simulation: Inquiry updated locally.');
+      alert('Failed to update inquiry.');
     } finally {
       setSubmitting(false);
     }
@@ -235,8 +184,7 @@ export const Admissions: React.FC = () => {
       alert('Inquiry deleted successfully.');
     } catch (err: any) {
       console.error(err);
-      setInquiries(prev => prev.filter(item => item.inquiryId !== inquiryId));
-      alert('Simulation: Inquiry deleted.');
+      alert('Failed to delete inquiry from database.');
     }
   };
 
@@ -244,13 +192,18 @@ export const Admissions: React.FC = () => {
     const confirm = window.confirm(`Enroll and activate student account for "${inq.applicantName}"? This creates standard student credentials.`);
     if (!confirm) return;
 
+    const genderInput = window.prompt(`Enter gender for ${inq.applicantName} (MALE / FEMALE):`, "MALE");
+    if (genderInput === null) return; // User cancelled
+    const gender = genderInput.trim().toUpperCase() === "FEMALE" ? "FEMALE" : "MALE";
+
     try {
       setActionInquiryId(inq.inquiryId);
       
       const regNo = await studentService.enrollAndActivateStudent(
         inq.inquiryId,
         inq.applicantName,
-        inq.contactInfo
+        inq.contactInfo,
+        gender
       );
 
       // Remove from inquiries list
@@ -264,27 +217,15 @@ export const Admissions: React.FC = () => {
         phone: '+94770000000',
         status: 'ACTIVE',
         regNo: regNo,
-        enrollmentDate: new Date().toISOString().split('T')[0]
+        enrollmentDate: new Date().toISOString().split('T')[0],
+        gender: gender
       };
       setStudents(prev => [newStudent, ...prev]);
 
       alert(`Student account successfully registered and activated! Registration Number: ${regNo}`);
     } catch (err: any) {
       console.error(err);
-      // Fallback
-      setInquiries(prev => prev.filter(item => item.inquiryId !== inq.inquiryId));
-      const simulatedReg = 'pr26' + Math.floor(100000 + Math.random() * 900000);
-      const newStudent: Student = {
-        studentId: inq.inquiryId,
-        fullName: inq.applicantName,
-        email: inq.contactInfo,
-        phone: '+94770000000',
-        status: 'ACTIVE',
-        regNo: simulatedReg,
-        enrollmentDate: new Date().toISOString().split('T')[0]
-      };
-      setStudents(prev => [newStudent, ...prev]);
-      alert(`Simulation: Student registered and activated! Registration Number: ${simulatedReg}`);
+      alert('Failed to enroll and activate student.');
     } finally {
       setActionInquiryId(null);
     }
@@ -300,25 +241,23 @@ export const Admissions: React.FC = () => {
       alert('Student account terminated successfully.');
     } catch (err: any) {
       console.error(err);
-      setStudents(prev => prev.filter(item => item.studentId !== studentId));
-      alert('Simulation: Student account terminated.');
+      alert('Failed to terminate student account.');
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-3 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-sm animate-in fade-in duration-200">
-          <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
-          <p className="font-medium">{error}</p>
-        </div>
+        <Alert variant="destructive" className="animate-in fade-in duration-200">
+          <AlertCircle className="h-5 w-5 text-rose-500 mt-0.5 shrink-0" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {/* Header Panel */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#E9EDF5] pb-6">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2 font-heading">
+          <h1 className="text-[18px] md:text-xl lg:text-2xl font-semibold text-slate-800 tracking-tight flex items-center gap-2 font-heading">
             <ClipboardList className="h-7 w-7 text-[#4F3FF0]" />
             Admissions Desk
           </h1>
@@ -574,6 +513,7 @@ export const Admissions: React.FC = () => {
                         <th className="px-6 py-4">REG NO</th>
                         <th className="px-6 py-4">STUDENT NAME</th>
                         <th className="px-6 py-4">EMAIL</th>
+                        <th className="px-6 py-4">GENDER</th>
                         <th className="px-6 py-4">STATUS</th>
                         <th className="px-6 py-4">DATE ENROLLED</th>
                         <th className="px-6 py-4 text-right">ACTIONS</th>
@@ -593,6 +533,9 @@ export const Admissions: React.FC = () => {
                               <Mail className="h-3.5 w-3.5 text-slate-400" />
                               {student.email}
                             </span>
+                          </td>
+                          <td className="px-6 py-4.5 text-slate-505 text-sm font-semibold">
+                            {student.gender || 'MALE'}
                           </td>
                           <td className="px-6 py-4.5">
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-full">
