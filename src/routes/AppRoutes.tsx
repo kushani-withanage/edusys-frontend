@@ -21,6 +21,7 @@ import Reviews from '@/pages/admin/Reviews';
 import PointsLevels from '@/pages/admin/PointsLevels';
 import Reports from '@/pages/admin/Reports';
 import CourseAccess from '@/pages/admin/CourseAccess';
+import UpdateAssignment from '@/pages/admin/UpdateAssignment';
 
 import StudentDashboard from '@/pages/student/StudentDashboard';
 import StudentAcademics from '@/pages/student/StudentAcademics';
@@ -66,6 +67,8 @@ function AppRoutes() {
           <Route path="/admin/courses-calendars" element={<CoursesCalendars />} />
           <Route path="/admin/courses/new" element={<AddCourse />} />
           <Route path="/admin/courses/:courseId" element={<StudentCourseDetail />} />
+          <Route path="/admin/courses/:courseId/sections/:sectionIdx/assignments/new" element={<UpdateAssignment />} />
+          <Route path="/admin/courses/:courseId/sections/:sectionIdx/assignments/:assignmentId/edit" element={<UpdateAssignment />} />
           <Route path="/admin/course-access" element={<CourseAccess />} />
           <Route path="/admin/admissions" element={<Admissions />} />
           <Route path="/admin/fee-management" element={<FeeManagement />} />

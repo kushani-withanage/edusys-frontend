@@ -4,6 +4,7 @@ import Button from '@/components/common/Button';
 import { courseService } from '@/services/courseService';
 import { batchService } from '@/services/batchService';
 import { studentService } from '@/services/studentService';
+import { courseAccessService, type CourseAccessGrantData } from '@/services/courseAccessService';
 import { api } from '@/utils/api';
 import type { Course, Batch, Student, Enrollment } from '@/interfaces';
 
@@ -14,6 +15,7 @@ interface AccessGrant {
   batchCode: string;
   userIdentifier: string; // email
   grantedAt: string;
+  status?: string;
 }
 
 interface CourseAccessProps {
@@ -46,23 +48,19 @@ export const CourseAccess: React.FC<CourseAccessProps> = ({ hideHeader = false }
       const apiBatches = await batchService.getBatches().catch(() => []);
       const apiStudents = await studentService.getStudents().catch(() => []);
       const apiEnrollments = await api.get<any[]>('/api/v1/enrollments').catch(() => []);
+      const apiGrants = await courseAccessService.getGrants().catch(() => []);
       
       setCourses(apiCourses);
       setBatches(apiBatches);
       setStudents(apiStudents);
       setEnrollments(apiEnrollments);
+      setGrants(apiGrants as AccessGrant[]);
 
       if (apiCourses.length > 0) {
         setSelectedCourseId(apiCourses[0].courseId);
       }
       if (apiBatches.length > 0) {
         setSelectedBatchId(apiBatches[0].batchId);
-      }
-
-      // Load existing access grants
-      const storedGrants = localStorage.getItem('course_access_grants');
-      if (storedGrants) {
-        setGrants(JSON.parse(storedGrants));
       }
     } catch (err) {
       console.error(err);
@@ -110,7 +108,7 @@ export const CourseAccess: React.FC<CourseAccessProps> = ({ hideHeader = false }
       // Check if student has a custom grant for this course and batch
       const grant = grants.find(
         (g: any) => g.courseId === selectedCourseId && 
-                    g.batchCode === targetBatch.batchName && 
+                    g.batchCode.toLowerCase() === targetBatch.batchName.toLowerCase() && 
                     g.userIdentifier.toLowerCase() === student.email.toLowerCase()
       );
 
@@ -125,6 +123,14 @@ export const CourseAccess: React.FC<CourseAccessProps> = ({ hideHeader = false }
     }).filter(Boolean) as Array<Student & { accessType: string; grantId: string | null }>;
   }, [selectedCourseId, selectedBatchId, batches, students, enrollments, grants]);
 
+  const emailsWithAccess = useMemo(() => {
+    return new Set(usersWithAccess.map(u => u.email.toLowerCase()));
+  }, [usersWithAccess]);
+
+  const eligibleStudents = useMemo(() => {
+    return batchStudents.filter(s => !emailsWithAccess.has(s.email.toLowerCase()));
+  }, [batchStudents, emailsWithAccess]);
+
   const filteredUsersWithAccess = useMemo(() => {
     return usersWithAccess.filter(user =>
       user.fullName.toLowerCase().includes(accessSearchQuery.toLowerCase()) ||
@@ -134,6 +140,7 @@ export const CourseAccess: React.FC<CourseAccessProps> = ({ hideHeader = false }
   }, [usersWithAccess, accessSearchQuery]);
 
   const handleToggleUser = (email: string) => {
+    if (emailsWithAccess.has(email.toLowerCase())) return;
     setSelectedUserEmails(prev =>
       prev.includes(email)
         ? prev.filter(e => e !== email)
@@ -143,13 +150,13 @@ export const CourseAccess: React.FC<CourseAccessProps> = ({ hideHeader = false }
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedUserEmails(batchStudents.map(s => s.email));
+      setSelectedUserEmails(eligibleStudents.map(s => s.email));
     } else {
       setSelectedUserEmails([]);
     }
   };
 
-  const handleGrantAccess = (e: React.FormEvent) => {
+  const handleGrantAccess = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCourseId || !selectedBatchId) {
       alert('Please select both a course and a batch.');
@@ -164,54 +171,69 @@ export const CourseAccess: React.FC<CourseAccessProps> = ({ hideHeader = false }
     const targetBatch = batches.find(b => b.batchId === selectedBatchId);
     if (!targetCourse || !targetBatch) return;
 
-    const newGrantsToAdd: AccessGrant[] = [];
+    const newGrantsToCreate: CourseAccessGrantData[] = [];
     const duplicateEmails: string[] = [];
 
     selectedUserEmails.forEach(email => {
       // Check duplicate grant
       const exists = grants.some(
         g => g.courseId === selectedCourseId && 
-             g.batchCode === targetBatch.batchName &&
+             g.batchCode.toLowerCase() === targetBatch.batchName.toLowerCase() &&
              g.userIdentifier.toLowerCase() === email.toLowerCase()
       );
 
       if (exists) {
         duplicateEmails.push(email);
       } else {
-        newGrantsToAdd.push({
-          id: 'grant-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+        newGrantsToCreate.push({
           courseId: selectedCourseId,
           courseName: targetCourse.courseName,
           batchCode: targetBatch.batchName,
-          userIdentifier: email.toLowerCase(),
-          grantedAt: new Date().toISOString().split('T')[0]
+          userIdentifier: email.toLowerCase()
         });
       }
     });
 
-    if (newGrantsToAdd.length === 0) {
+    if (newGrantsToCreate.length === 0) {
       alert('All selected users already have access to this course in this batch.');
       return;
     }
 
-    const updated = [...newGrantsToAdd, ...grants];
-    setGrants(updated);
-    localStorage.setItem('course_access_grants', JSON.stringify(updated));
-    setSelectedUserEmails([]);
-    
-    let msg = `Access granted successfully to ${newGrantsToAdd.length} user(s).`;
-    if (duplicateEmails.length > 0) {
-      msg += ` (${duplicateEmails.length} already had access)`;
+    try {
+      setLoading(true);
+      const apiGrants = await Promise.all(
+        newGrantsToCreate.map(payload => courseAccessService.grantAccess(payload))
+      );
+      
+      setGrants(prev => [...(apiGrants as AccessGrant[]), ...prev]);
+      setSelectedUserEmails([]);
+      
+      let msg = `Access granted successfully to ${apiGrants.length} user(s).`;
+      if (duplicateEmails.length > 0) {
+        msg += ` (${duplicateEmails.length} already had access)`;
+      }
+      setSuccessMsg(msg);
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to grant course access.');
+    } finally {
+      setLoading(false);
     }
-    setSuccessMsg(msg);
-    setTimeout(() => setSuccessMsg(null), 4000);
   };
 
-  const handleRevokeAccess = (id: string, user: string) => {
+  const handleRevokeAccess = async (id: string, user: string) => {
     if (confirm(`Are you sure you want to revoke course access for ${user}?`)) {
-      const updated = grants.filter(g => g.id !== id);
-      setGrants(updated);
-      localStorage.setItem('course_access_grants', JSON.stringify(updated));
+      try {
+        setLoading(true);
+        await courseAccessService.revokeAccess(id);
+        setGrants(prev => prev.filter(g => g.id !== id));
+      } catch (err) {
+        console.error(err);
+        alert('Failed to revoke course access.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -254,6 +276,7 @@ export const CourseAccess: React.FC<CourseAccessProps> = ({ hideHeader = false }
                 value={selectedCourseId}
                 onChange={e => {
                   setSelectedCourseId(e.target.value);
+                  setSelectedUserEmails([]);
                   setAccessSearchQuery('');
                 }}
                 className="w-full pl-4 pr-10 py-3 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-xs text-slate-800 font-bold outline-none cursor-pointer focus:bg-white focus:ring-4 focus:ring-[#4F3FF0]/10"
@@ -292,13 +315,13 @@ export const CourseAccess: React.FC<CourseAccessProps> = ({ hideHeader = false }
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide block">
                   Select Users ({selectedUserEmails.length} selected)
                 </label>
-                {batchStudents.length > 0 && (
+                {eligibleStudents.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => handleSelectAll(selectedUserEmails.length < batchStudents.length)}
+                    onClick={() => handleSelectAll(selectedUserEmails.length < eligibleStudents.length)}
                     className="text-[10px] font-black text-[#4F3FF0] hover:underline bg-transparent border-none cursor-pointer"
                   >
-                    {selectedUserEmails.length === batchStudents.length ? 'Deselect All' : 'Select All'}
+                    {selectedUserEmails.length === eligibleStudents.length ? 'Deselect All' : 'Select All'}
                   </button>
                 )}
               </div>
@@ -328,20 +351,37 @@ export const CourseAccess: React.FC<CourseAccessProps> = ({ hideHeader = false }
                 ) : (
                   filteredBatchStudents.map(student => {
                     const isChecked = selectedUserEmails.includes(student.email);
+                    const hasAccess = emailsWithAccess.has(student.email.toLowerCase());
                     return (
                       <div
                         key={student.studentId}
-                        onClick={() => handleToggleUser(student.email)}
-                        className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer hover:bg-slate-100/50 transition-colors ${isChecked ? 'bg-indigo-50/30' : ''}`}
+                        onClick={() => {
+                          if (!hasAccess) {
+                            handleToggleUser(student.email);
+                          }
+                        }}
+                        className={`flex items-center gap-3 p-2.5 rounded-xl transition-colors ${
+                          hasAccess 
+                            ? 'opacity-60 cursor-not-allowed select-none bg-slate-50' 
+                            : 'cursor-pointer hover:bg-slate-100/50'
+                        } ${isChecked ? 'bg-indigo-50/30' : ''}`}
                       >
                         <input
                           type="checkbox"
-                          checked={isChecked}
+                          checked={isChecked || hasAccess}
+                          disabled={hasAccess}
                           onChange={() => {}} // toggled by parent div click
-                          className="h-4 w-4 rounded border-slate-350 text-[#4F3FF0] focus:ring-[#4F3FF0] cursor-pointer"
+                          className="h-4 w-4 rounded border-slate-350 text-[#4F3FF0] focus:ring-[#4F3FF0] cursor-pointer disabled:cursor-not-allowed"
                         />
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-bold text-slate-800 truncate leading-tight">{student.fullName}</p>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <p className="text-xs font-bold text-slate-800 truncate leading-tight">{student.fullName}</p>
+                            {hasAccess && (
+                              <span className="text-[8px] font-extrabold text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded uppercase tracking-wide shrink-0 select-none">
+                                Has Access
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[10px] font-medium text-slate-450 truncate block mt-0.5">{student.email}</span>
                         </div>
                         {student.regNo && (

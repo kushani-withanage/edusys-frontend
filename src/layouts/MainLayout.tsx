@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { LogOut, Menu, X, Shield, ChevronRight, User, Search, Bell, Moon, ChevronDown } from 'lucide-react';
 import { cn } from '@/utils/utils';
+import { courseService } from '@/services/courseService';
 
 export interface SidebarLink {
   label: string;
@@ -24,7 +25,38 @@ export interface MainLayoutProps {
   logoIcon?: React.ComponentType<{ className?: string }>;
 }
 
-const getBreadcrumbLabel = (segment: string): string => {
+const getBatchForCourse = (courseId: string, courseName: string): string => {
+  const map: Record<string, string> = {
+    'crs-1': 'iCD110',
+    'crs-2': 'iCM111',
+    'crs-3': 'iCD112',
+    'crs-4': 'iCM113',
+    'crs-5': 'iCD114',
+    'crs-6': 'iCD115',
+    'crs0001': 'iCD110',
+    'crs0002': 'iCD110',
+    'crs0003': 'iCD110',
+    'crs0004': 'iCM111',
+    'crs0005': 'iCD112',
+    'crs0006': 'iCD110',
+    'icd110': 'iCD110',
+    'icm111': 'iCM111',
+  };
+  const idKey = courseId.toLowerCase();
+  if (map[idKey]) return map[idKey];
+  
+  const nameLower = courseName.toLowerCase();
+  if (nameLower.includes('programming') || nameLower.includes('software')) return 'iCD110';
+  if (nameLower.includes('database') || nameLower.includes('web')) return 'iCM111';
+  if (nameLower.includes('oriented') || nameLower.includes('oop')) return 'iCD112';
+  if (nameLower.includes('internet') || nameLower.includes('technologies')) return 'iCM113';
+  if (nameLower.includes('standalone')) return 'iCD114';
+  if (nameLower.includes('enterprise')) return 'iCD115';
+  
+  return 'iCD110';
+};
+
+const getBreadcrumbLabel = (segment: string, dbCourses: any[] = []): string => {
   const customMap: Record<string, string> = {
     dashboard: 'Dashboard',
     academics: 'My Academics',
@@ -47,6 +79,15 @@ const getBreadcrumbLabel = (segment: string): string => {
   
   const key = segment.toLowerCase();
   if (customMap[key]) return customMap[key];
+
+  // 1. Check loaded database courses list
+  const foundDb = dbCourses.find((c: any) => 
+    c.courseId?.toUpperCase() === segment.toUpperCase()
+  );
+  if (foundDb) {
+    const batch = foundDb.batchCode || getBatchForCourse(foundDb.courseId, foundDb.courseName);
+    return `${batch} ${foundDb.courseName}`;
+  }
   
   const isCourseId = key.startsWith('crs') || key.startsWith('icd') || key.startsWith('icm');
   if (isCourseId) {
@@ -89,6 +130,13 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedLinks, setExpandedLinks] = useState<Record<string, boolean>>({});
+  const [dbCourses, setDbCourses] = useState<any[]>([]);
+
+  useEffect(() => {
+    courseService.getCourses()
+      .then(data => setDbCourses(data))
+      .catch(err => console.error('Error fetching courses for breadcrumbs:', err));
+  }, []);
 
   const generateBreadcrumbs = () => {
     const rawSegments = location.pathname.split('/').filter(x => x);
@@ -103,7 +151,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     subSegments.forEach((seg) => {
       currentPath += `/${seg}`;
       items.push({
-        label: getBreadcrumbLabel(seg),
+        label: getBreadcrumbLabel(seg, dbCourses),
         path: currentPath
       });
     });

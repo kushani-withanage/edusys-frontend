@@ -40,6 +40,9 @@ export interface Course {
   credits?: number;
   durationWeeks?: number;
   description?: string;
+  batchCode?: string;
+  instructor?: string;
+  status?: string;
 }
 
 export interface Enrollment {

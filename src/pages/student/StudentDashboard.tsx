@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   BookOpen,
@@ -8,6 +8,10 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { courseAccessService } from '@/services/courseAccessService';
+import { api } from '@/utils/api';
+import { calendarService } from '@/services/calendarService';
+import { gradeService } from '@/services/gradeService';
 
 interface CalendarEvent {
   id: string;
@@ -20,32 +24,68 @@ interface CalendarEvent {
 
 export const StudentDashboard: React.FC = () => {
   const { user } = useAuth();
+  const [myCourses, setMyCourses] = useState<any[]>([]);
 
-  // Load custom granted courses
-  const grantedCourses = useMemo(() => {
-    if (!user?.email) return [];
-    const userKey = user.email.toLowerCase();
-    
-    const storedGrants = localStorage.getItem('course_access_grants');
-    if (!storedGrants) return [];
-    
-    const allGrants = JSON.parse(storedGrants);
-    return allGrants.filter((g: any) => g.userIdentifier.toLowerCase() === userKey);
-  }, [user]);
+  useEffect(() => {
+    api.get<any[]>('/api/v1/courses/my-courses')
+      .then(data => setMyCourses(data))
+      .catch(err => console.error('Error fetching my courses:', err));
+  }, []);
 
   // --- States ---
-  const points = 240;
+  const [points, setPoints] = useState(240);
   const nextLevelPoints = 300;
+  const [grades, setGrades] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (user?.userId) {
+      api.get<any[]>('/api/v1/career-points-ledger')
+        .then(data => {
+          const studentLedger = data.filter((item: any) => item.studentId === user.userId);
+          const totalPoints = studentLedger.reduce((acc, curr) => acc + (curr.pointsAwarded || 0), 0);
+          if (totalPoints > 0) {
+            setPoints(totalPoints);
+          }
+        })
+        .catch(err => console.error("Error loading career points:", err));
+
+      gradeService.getGrades()
+        .then(data => {
+          const studentGrades = data.filter((g: any) => g.studentId === user.userId);
+          setGrades(studentGrades);
+        })
+        .catch(err => console.error("Error loading student grades:", err));
+    }
+  }, [user]);
 
   // Calendar States
   const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 7, 2)); // Default to August 2, 2026
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date(2026, 7, 2)); // Default selected date
-  const [events] = useState<CalendarEvent[]>([
+  const [events, setEvents] = useState<CalendarEvent[]>([
     { id: '1', title: 'Advanced SE Assignment 1', date: '2026-08-05', type: 'assignment', course: 'Advanced Software Engineering', time: '11:59 PM' },
     { id: '2', title: 'OOP Review Session', date: '2026-08-18', type: 'class', course: 'Object Oriented Programming', time: '02:00 PM' },
     { id: '3', title: 'Design Patterns Exam', date: '2026-08-20', type: 'exam', course: 'Advanced Software Engineering', time: '09:00 AM' },
     { id: '4', title: 'Clean Architecture Review', date: '2026-08-28', type: 'class', course: 'Advanced Software Engineering', time: '03:00 PM' }
   ]);
+
+  useEffect(() => {
+    calendarService.getEvents()
+      .then(data => {
+        if (data.length > 0) {
+          const mapped = data.map((item: any) => ({
+            id: item.calendarId,
+            title: item.eventName,
+            date: item.eventDate,
+            type: (item.status?.toLowerCase() === 'exam' ? 'exam' : 
+                   item.status?.toLowerCase() === 'holiday' ? 'event' : 'class') as any,
+            course: item.description || 'Academic Program',
+            time: '09:00 AM'
+          }));
+          setEvents(mapped);
+        }
+      })
+      .catch(err => console.error("Error loading calendar events:", err));
+  }, []);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -188,26 +228,40 @@ export const StudentDashboard: React.FC = () => {
             </h3>
 
             <div className="grid grid-cols-1 gap-4 select-none">
-              <Link 
-                to="/student/courses/ICD110" 
-                className="border border-[#E9EDF5] p-4.5 rounded-2xl hover:border-[#4F3FF0]/40 hover:bg-[#4F3FF0]/5 hover:shadow-md transition-all text-left block cursor-pointer"
-              >
-                <h4 className="font-extrabold text-slate-800 text-sm hover:text-[#4F3FF0] transition-colors">Advanced Software Engineering</h4>
-                <p className="text-[10px] font-extrabold text-[#4F3FF0] mt-1">ICD110</p>
-                <p className="text-[10px] font-semibold text-slate-450 mt-1">Instructor: Mrs. Kushani Withanage</p>
-              </Link>
+               {myCourses.map((c: any) => (
+                 <Link 
+                   key={c.courseId}
+                   to={`/student/courses/${c.courseId}`} 
+                   className="border border-[#E9EDF5] p-4.5 rounded-2xl hover:border-[#4F3FF0]/40 hover:bg-[#4F3FF0]/5 hover:shadow-md transition-all text-left block cursor-pointer"
+                 >
+                   <div className="flex justify-between items-start gap-4">
+                     <h4 className="font-extrabold text-slate-800 text-sm hover:text-[#4F3FF0] transition-colors">{c.courseName}</h4>
+                     <span className={`inline-flex px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase leading-none border shrink-0 ${
+                       c.status?.toLowerCase() === 'done'
+                         ? 'bg-emerald-50 border-emerald-250 text-emerald-700'
+                         : 'bg-indigo-50 border-indigo-250 text-[#4F3FF0]'
+                     }`}>
+                       {c.status || 'Ongoing'}
+                     </span>
+                   </div>
+                   <div className="flex flex-col gap-0.5 mt-2 text-[10px] font-bold text-slate-500">
+                      {c.batchCode && (
+                        <div>
+                          Batch: <span className="text-slate-850 font-black">{c.batchCode}</span>
+                        </div>
+                      )}
+                      <div>
+                        Instructor: <span className="text-slate-800 font-semibold">{c.instructor || 'Academic Faculty'}</span>
+                      </div>
+                    </div>
+                 </Link>
+               ))}
 
-              {grantedCourses.map((grant: any) => (
-                <Link 
-                  key={grant.id}
-                  to={`/student/courses/${grant.courseId}`} 
-                  className="border border-[#E9EDF5] p-4.5 rounded-2xl hover:border-[#4F3FF0]/40 hover:bg-[#4F3FF0]/5 hover:shadow-md transition-all text-left block cursor-pointer animate-in fade-in duration-200"
-                >
-                  <h4 className="font-extrabold text-slate-800 text-sm hover:text-[#4F3FF0] transition-colors">{grant.courseName}</h4>
-                  <p className="text-[10px] font-extrabold text-[#4F3FF0] mt-1">{grant.batchCode}</p>
-                  <p className="text-[10px] font-semibold text-slate-450 mt-1">Instructor: Academic Faculty</p>
-                </Link>
-              ))}
+               {myCourses.length === 0 && (
+                 <div className="text-center py-6 text-slate-450 text-xs font-semibold">
+                   No enrolled or custom granted courses found.
+                 </div>
+               )}
             </div>
 
             {/* Test scores */}
@@ -215,10 +269,17 @@ export const StudentDashboard: React.FC = () => {
               <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block select-none">RECENT TEST SCORES</span>
               <div className="border border-[#E9EDF5] rounded-2xl overflow-hidden text-xs">
                 <div className="divide-y divide-[#E9EDF5] font-semibold text-slate-700">
-                  <div className="px-5 py-3 flex justify-between items-center hover:bg-slate-50/20">
-                    <span>Software Engineering</span>
-                    <span className="font-extrabold text-slate-800">88/100</span>
-                  </div>
+                  {grades.map((g: any) => (
+                    <div key={g.gradeId} className="px-5 py-3 flex justify-between items-center hover:bg-slate-50/20">
+                      <span>{g.courseId}</span>
+                      <span className="font-extrabold text-slate-800">{g.gradeValue}</span>
+                    </div>
+                  ))}
+                  {grades.length === 0 && (
+                    <div className="px-5 py-3 text-center text-slate-450 text-[11px]">
+                      No recent test scores found.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

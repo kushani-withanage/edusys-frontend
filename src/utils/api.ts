@@ -33,7 +33,8 @@ async function handleResponse<T>(response: Response): Promise<T> {
     const errorText = await response.text();
     throw new Error(errorText || `Request failed with status ${response.status}`);
   }
-  return response.json() as Promise<T>;
+  const text = await response.text();
+  return (text ? JSON.parse(text) : {}) as T;
 }
 
 export const api = {

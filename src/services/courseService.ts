@@ -6,11 +6,22 @@ export interface CourseData {
   credits: number;
   durationWeeks: number;
   description: string;
+  batchCode?: string;
+  level?: string;
+  isCompulsory?: boolean;
+  certReqs?: string;
+  qualifyIntro?: string;
+  qualifyReqs?: string;
+  sections?: string;
 }
 
 export const courseService = {
   async getCourses() {
     return api.get<any[]>('/api/v1/courses');
+  },
+
+  async getCourse(courseId: string) {
+    return api.get<any>(`/api/v1/courses/${courseId}`);
   },
 
   async createCourse(course: CourseData) {

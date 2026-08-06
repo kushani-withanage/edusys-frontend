@@ -13,6 +13,7 @@ import Button from '@/components/common/Button';
 import TextField from '@/components/common/TextField';
 import { materialService, type MaterialData } from '@/services/materialService';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { api } from '@/utils/api';
 
 interface Material {
   assignmentId: string;
@@ -31,6 +32,7 @@ export const Materials: React.FC = () => {
   // --- Modals State ---
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   // --- Form States ---
   const [uploadForm, setUploadForm] = useState({
@@ -96,8 +98,24 @@ export const Materials: React.FC = () => {
 
     try {
       setSubmitting(true);
+      let finalTitle = uploadForm.title;
+
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        
+        const uploadRes = await api.post<any>('/api/v1/assignments/upload-file', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        if (uploadRes && uploadRes.fileName) {
+          finalTitle = uploadRes.fileName;
+        }
+      }
+
       const payload: MaterialData = {
-        title: uploadForm.title,
+        title: finalTitle,
         description: uploadForm.description,
         dueDate: uploadForm.dueDate,
         createdBy: uploadForm.createdBy
@@ -115,6 +133,7 @@ export const Materials: React.FC = () => {
 
       setMaterials(prev => [newMaterial, ...prev]);
       setShowUploadModal(false);
+      setSelectedFile(null);
       setUploadForm({
         title: '',
         description: 'ICD110',
@@ -224,7 +243,7 @@ export const Materials: React.FC = () => {
                 </span>
                 
                 <h4 className="text-sm font-extrabold text-slate-800 leading-snug font-sans truncate max-w-[280px]" title={mat.title}>
-                  {mat.title}
+                  {mat.title.replace(/^\d+_/, '')}
                 </h4>
 
                 <div className="flex items-center gap-4 text-[10px] font-bold text-slate-450 uppercase pt-2">
@@ -242,7 +261,13 @@ export const Materials: React.FC = () => {
               {/* Action Buttons */}
               <div className="flex items-center gap-2 shrink-0 select-none">
                 <button
-                  onClick={() => alert(`Opening preview window for resource file: ${mat.title}`)}
+                  onClick={() => {
+                    if (mat.title.startsWith('mat-') || mat.assignmentId.startsWith('mat-')) {
+                      alert('Simulated resource has no backing static file.');
+                    } else {
+                      window.open(`http://localhost:8080/uploads/${mat.title}`, '_blank');
+                    }
+                  }}
                   className="p-2 border border-slate-200 hover:border-[#4F3FF0] hover:text-[#4F3FF0] rounded-xl text-slate-450 transition-all cursor-pointer bg-white"
                   title="View Material"
                 >
@@ -273,6 +298,23 @@ export const Materials: React.FC = () => {
             
             <form onSubmit={handleUploadSubmit} className="space-y-4 font-sans">
               
+              <div className="space-y-1.5 text-left">
+                <label className="block text-xs font-bold tracking-wider uppercase text-slate-700">Select PDF Resource File *</label>
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={e => {
+                    const file = e.target.files?.[0] || null;
+                    setSelectedFile(file);
+                    if (file) {
+                      setUploadForm(prev => ({ ...prev, title: file.name }));
+                    }
+                  }}
+                  required
+                  className="w-full pl-4 pr-4 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-xs text-slate-800 font-semibold outline-none cursor-pointer"
+                />
+              </div>
+
               <TextField
                 label="Resource Filename / Title *"
                 value={uploadForm.title}

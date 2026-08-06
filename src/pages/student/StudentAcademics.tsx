@@ -9,22 +9,19 @@ import {
 import { examService } from '@/services/examService';
 import { materialService } from '@/services/materialService';
 import { useAuth } from '@/hooks/useAuth';
+import { courseAccessService } from '@/services/courseAccessService';
+import { api } from '@/utils/api';
 
 export const StudentAcademics: React.FC = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'courses' | 'exams' | 'materials'>('courses');
+  const [myCourses, setMyCourses] = useState<any[]>([]);
 
-  // Load custom granted courses
-  const grantedCourses = useMemo(() => {
-    if (!user?.email) return [];
-    const userKey = user.email.toLowerCase();
-    
-    const storedGrants = localStorage.getItem('course_access_grants');
-    if (!storedGrants) return [];
-    
-    const allGrants = JSON.parse(storedGrants);
-    return allGrants.filter((g: any) => g.userIdentifier.toLowerCase() === userKey);
-  }, [user]);
+  useEffect(() => {
+    api.get<any[]>('/api/v1/courses/my-courses')
+      .then(data => setMyCourses(data))
+      .catch(err => console.error('Error fetching my courses:', err));
+  }, []);
 
   // Data states
   const [materials, setMaterials] = useState<any[]>([]);
@@ -35,22 +32,7 @@ export const StudentAcademics: React.FC = () => {
   const [activeExam, setActiveExam] = useState<any | null>(null);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
 
-  // Simulated static lists matching Figure 3.15, 3.16, 3.17
-  const enrolledModules = [
-    { code: 'ICD110', name: 'Advanced Software Engineering', instructor: 'Mrs. Kushani Withanage' }
-  ];
 
-
-  const staticMaterials = [
-    { id: 'mat-1', title: 'Git branching structures roadmap.pdf', batchCode: 'ICD110', type: 'PDF' }
-  ];
-
-  const staticExams = [
-    { id: 'exam-1', title: 'Git & Version Control Quiz', datetime: 'Available Now', duration: 15, status: 'Available', questions: [
-      { id: 'q-1', text: 'Which command merges changes from a branch?', options: ['git merge', 'git pull', 'git checkout', 'git commit'], correct: 'git merge', marks: 10 }
-    ]},
-    { id: 'exam-2', title: 'Software Design Patterns Term Final', datetime: 'August 20th 09:00 AM', duration: 60, status: 'Upcoming', questions: [] }
-  ];
 
   useEffect(() => {
     const fetchData = async () => {
@@ -60,12 +42,12 @@ export const StudentAcademics: React.FC = () => {
           examService.getExams().catch(() => [])
         ]);
 
-        setMaterials(materialsData.length > 0 ? materialsData : staticMaterials);
-        setExams(examsData.length > 0 ? examsData : staticExams);
+        setMaterials(materialsData);
+        setExams(examsData);
       } catch (err) {
-        console.error('Simulating sandbox course assets');
-        setMaterials(staticMaterials);
-        setExams(staticExams);
+        console.error('Error fetching course assets:', err);
+        setMaterials([]);
+        setExams([]);
       }
     };
     fetchData();
@@ -73,7 +55,11 @@ export const StudentAcademics: React.FC = () => {
 
 
   const handleDownloadMaterial = (title: string) => {
-    alert(`Initiating download for: ${title}`);
+    if (title.startsWith('mat-')) {
+      alert('Simulated resource has no backing static file.');
+    } else {
+      window.open(`http://localhost:8080/uploads/${title}`, '_blank');
+    }
   };
 
   // --- Quiz handlers ---
@@ -166,29 +152,31 @@ export const StudentAcademics: React.FC = () => {
                 MY ENROLLED MODULES (CLICK TO OPEN SYLLABUS & ASSIGNMENTS)
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 select-none">
-                {enrolledModules.map(mod => (
+                {myCourses.map(c => (
                   <Link 
-                    key={mod.code}
-                    to={`/student/courses/${mod.code}`}
-                    className="bg-white border border-[#E9EDF5] hover:border-[#4F3FF0]/40 hover:bg-[#4F3FF0]/5 hover:shadow-md p-6 rounded-2xl shadow-sm transition-all block cursor-pointer text-left"
+                    key={c.courseId}
+                    to={`/student/courses/${c.courseId}`}
+                    className="bg-white border border-[#E9EDF5] hover:border-[#4F3FF0]/40 hover:bg-[#4F3FF0]/5 hover:shadow-md p-6 rounded-2xl shadow-sm transition-all block cursor-pointer text-left animate-in fade-in duration-200"
                   >
-                    <h4 className="font-extrabold text-slate-800 text-base hover:text-[#4F3FF0] transition-colors">{mod.name}</h4>
-                    <span className="text-[10px] font-extrabold text-[#4F3FF0] mt-1.5 block">{mod.code}</span>
-                    <p className="text-xs font-semibold text-slate-450 mt-2">Instructor: {mod.instructor}</p>
+                    <h4 className="font-extrabold text-slate-800 text-base hover:text-[#4F3FF0] transition-colors">{c.courseName}</h4>
+                    <div className="flex flex-col gap-0.5 mt-3 text-xs font-bold text-slate-500">
+                      {c.batchCode && (
+                        <div>
+                          Batch: <span className="text-slate-850 font-black">{c.batchCode}</span>
+                        </div>
+                      )}
+                      <div>
+                        Instructor: <span className="text-slate-800 font-semibold">{c.instructor || 'Academic Faculty'}</span>
+                      </div>
+                    </div>
                   </Link>
                 ))}
 
-                {grantedCourses.map((grant: any) => (
-                  <Link 
-                    key={grant.id}
-                    to={`/student/courses/${grant.courseId}`}
-                    className="bg-white border border-[#E9EDF5] hover:border-[#4F3FF0]/40 hover:bg-[#4F3FF0]/5 hover:shadow-md p-6 rounded-2xl shadow-sm transition-all block cursor-pointer text-left animate-in fade-in duration-200"
-                  >
-                    <h4 className="font-extrabold text-slate-800 text-base hover:text-[#4F3FF0] transition-colors">{grant.courseName}</h4>
-                    <span className="text-[10px] font-extrabold text-[#4F3FF0] mt-1.5 block">{grant.batchCode}</span>
-                    <p className="text-xs font-semibold text-slate-450 mt-2">Instructor: Academic Faculty</p>
-                  </Link>
-                ))}
+                {myCourses.length === 0 && (
+                  <div className="col-span-2 text-center py-10 text-slate-450 text-xs font-semibold bg-white border border-[#E9EDF5] rounded-2xl">
+                    No enrolled or custom granted courses found.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -255,6 +243,13 @@ export const StudentAcademics: React.FC = () => {
                       </tr>
                     );
                   })}
+                  {exams.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-10 text-center text-slate-450 text-xs font-semibold select-none">
+                        No active exams or assessments found.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -278,7 +273,7 @@ export const StudentAcademics: React.FC = () => {
                     <span className="inline-flex px-1.5 py-0.5 bg-rose-50 text-rose-600 border border-rose-100 rounded text-[8px] font-extrabold uppercase leading-none">
                       {mat.type || 'PDF'}
                     </span>
-                    <h4 className="font-extrabold text-slate-800 text-xs truncate" title={mat.title}>{mat.title}</h4>
+                    <h4 className="font-extrabold text-slate-800 text-xs truncate" title={mat.title}>{mat.title.replace(/^\d+_/, '')}</h4>
                     <span className="text-[8px] font-bold text-slate-400 block tracking-wide uppercase leading-none mt-1">BATCH CODE: {mat.batchCode}</span>
                   </div>
                   <button
@@ -289,6 +284,12 @@ export const StudentAcademics: React.FC = () => {
                   </button>
                 </div>
               ))}
+
+              {materials.length === 0 && (
+                <div className="col-span-full text-center py-10 text-slate-450 text-xs font-semibold select-none bg-[#F8FAFC] border border-slate-200/50 rounded-2xl">
+                  No learning materials or worksheets found.
+                </div>
+              )}
             </div>
           </div>
         )}

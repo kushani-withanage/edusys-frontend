@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   Plus, 
@@ -8,6 +8,9 @@ import {
   ChevronRight,
   BookOpen
 } from 'lucide-react';
+import { courseService } from '@/services/courseService';
+import { toast } from '@/utils/toast';
+import { batchService } from '@/services/batchService';
 
 interface CustomCourseSection {
   title: string;
@@ -16,15 +19,30 @@ interface CustomCourseSection {
 
 export const AddCourse: React.FC = () => {
   const navigate = useNavigate();
+  const [submitting, setSubmitting] = useState(false);
 
   // --- Form States ---
   const [courseName, setCourseName] = useState('');
-  const [batchCode, setBatchCode] = useState('iCD110');
+  const [batchCode, setBatchCode] = useState('');
   const [credits, setCredits] = useState(3);
   const [durationWeeks, setDurationWeeks] = useState(12);
   const [description, setDescription] = useState('');
   const [level, setLevel] = useState('Level 1');
   const [isCompulsory, setIsCompulsory] = useState(true);
+
+  const [dbBatches, setDbBatches] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Fetch batches
+    batchService.getBatches()
+      .then(data => {
+        setDbBatches(data);
+        if (data.length > 0) {
+          setBatchCode(data[0].batchName);
+        }
+      })
+      .catch(err => console.error('Error loading batches:', err));
+  }, []);
 
   // Template States
   const [certReqs, setCertReqs] = useState<string[]>([
@@ -99,7 +117,7 @@ export const AddCourse: React.FC = () => {
   };
 
   // --- Submit handler ---
-  const handleSaveCourse = (e: React.FormEvent) => {
+  const handleSaveCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!courseName.trim()) {
       alert('Please enter a course title.');
@@ -111,44 +129,50 @@ export const AddCourse: React.FC = () => {
     const cleanQualifyReqs = qualifyReqs.filter(q => q.trim() !== '');
     const cleanSections = sections.filter(s => s.title.trim() !== '');
 
-    const generatedId = 'crs-custom-' + Date.now();
-
-    const newCourse = {
-      courseId: generatedId,
+    const payload = {
       courseName,
       description,
       credits: Number(credits),
       durationWeeks: Number(durationWeeks),
       batchCode,
-      certReqs: cleanCertReqs,
+      certReqs: JSON.stringify(cleanCertReqs),
       qualifyIntro,
-      qualifyReqs: cleanQualifyReqs,
-      sections: cleanSections,
+      qualifyReqs: JSON.stringify(cleanQualifyReqs),
+      sections: JSON.stringify(cleanSections),
       level,
       isCompulsory
     };
 
-    // Save to local storage custom courses list
-    const stored = localStorage.getItem('custom_courses');
-    const existing = stored ? JSON.parse(stored) : [];
-    localStorage.setItem('custom_courses', JSON.stringify([...existing, newCourse]));
-
-    alert('New Course Template saved successfully!');
-    navigate('/admin/courses-calendars?tab=courses');
+    try {
+      setSubmitting(true);
+      await courseService.createCourse(payload);
+      toast.success('New Course Template saved successfully!');
+      navigate('/admin/courses-calendars?tab=courses');
+    } catch (err) {
+      console.error(err);
+      // Fallback to local storage custom courses list if api fails
+      const stored = localStorage.getItem('custom_courses');
+      const existing = stored ? JSON.parse(stored) : [];
+      const fallbackPayload = {
+        ...payload,
+        courseId: 'crs-custom-' + Date.now(),
+        certReqs: cleanCertReqs,
+        qualifyReqs: cleanQualifyReqs,
+        sections: cleanSections
+      };
+      localStorage.setItem('custom_courses', JSON.stringify([...existing, fallbackPayload]));
+      toast.warning('New Course Template saved successfully (simulated fallback)!');
+      navigate('/admin/courses-calendars?tab=courses');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <div className="space-y-6 font-sans text-left">
       
       {/* Breadcrumbs & Navigation */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 select-none">
-          <Link to="/admin/dashboard" className="hover:text-[#4F3FF0] transition-colors">Dashboard</Link>
-          <ChevronRight className="h-3 w-3" />
-          <Link to="/admin/courses-calendars?tab=courses" className="hover:text-[#4F3FF0] transition-colors">Courses</Link>
-          <ChevronRight className="h-3 w-3" />
-          <span className="text-slate-600">Create Course Template</span>
-        </div>
+      <div className="flex justify-end">
         <Link 
           to="/admin/courses-calendars?tab=courses" 
           className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-[#4F3FF0] transition-colors"
@@ -191,12 +215,20 @@ export const AddCourse: React.FC = () => {
                 onChange={e => setBatchCode(e.target.value)}
                 className="w-full px-4 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-xs text-slate-750 font-bold outline-none cursor-pointer"
               >
-                <option value="iCD110">iCD110</option>
-                <option value="iCM111">iCM111</option>
-                <option value="iCD112">iCD112</option>
-                <option value="iCM113">iCM113</option>
-                <option value="iCD114">iCD114</option>
-                <option value="iCD115">iCD115</option>
+                {dbBatches.length > 0 ? (
+                  dbBatches.map(b => (
+                    <option key={b.batchId} value={b.batchName}>{b.batchName}</option>
+                  ))
+                ) : (
+                  <>
+                    <option value="iCD110">iCD110</option>
+                    <option value="iCM111">iCM111</option>
+                    <option value="iCD112">iCD112</option>
+                    <option value="iCM113">iCM113</option>
+                    <option value="iCD114">iCD114</option>
+                    <option value="iCD115">iCD115</option>
+                  </>
+                )}
               </select>
             </div>
 
@@ -211,7 +243,6 @@ export const AddCourse: React.FC = () => {
                 <option value="Level 1">Level 1</option>
                 <option value="Level 2">Level 2</option>
                 <option value="Level 3">Level 3</option>
-                <option value="Level 4">Level 4</option>
               </select>
             </div>
 
@@ -447,9 +478,10 @@ export const AddCourse: React.FC = () => {
             </Link>
             <button
               type="submit"
-              className="px-6 py-2.5 bg-[#4F3FF0] hover:bg-[#3D2ED0] text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-lg shadow-[#4F3FF0]/15"
+              disabled={submitting}
+              className="px-6 py-2.5 bg-[#4F3FF0] hover:bg-[#3D2ED0] text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-lg shadow-[#4F3FF0]/15 disabled:opacity-50"
             >
-              Save Course Template
+              {submitting ? 'Saving...' : 'Save Course Template'}
             </button>
           </div>
 

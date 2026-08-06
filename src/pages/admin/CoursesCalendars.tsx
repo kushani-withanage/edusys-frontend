@@ -20,6 +20,8 @@ import { studentService } from '@/services/studentService';
 import type { Course, Batch, CalendarEvent, Inquiry } from '@/interfaces';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import CourseAccess from './CourseAccess';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from '@/utils/toast';
 
 const getBatchNameForCourse = (courseId: string, courseName: string): string => {
   const map: Record<string, string> = {
@@ -48,11 +50,14 @@ const getBatchNameForCourse = (courseId: string, courseName: string): string => 
 
 export const CoursesCalendars: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'courses';
+  const isAdmin = user?.role === 'ADMIN';
 
   // --- State for lists ---
   const [courses, setCourses] = useState<Course[]>([]);
+  const [deletingCourse, setDeletingCourse] = useState<Course | null>(null);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
@@ -445,22 +450,36 @@ export const CoursesCalendars: React.FC = () => {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredCourses.map(course => (
-                    <div 
+                    <Link 
                       key={course.courseId} 
-                      className="bg-white border border-[#E9EDF5] hover:border-[#4F3FF0]/40 p-6 rounded-3xl shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between text-left"
+                      to={`/admin/courses/${course.courseId}`}
+                      className="bg-white border border-[#E9EDF5] hover:border-[#4F3FF0]/40 p-6 rounded-3xl shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between text-left cursor-pointer group relative"
                     >
+                      {isAdmin && (
+                        <div className="absolute top-4 right-4 z-10">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setDeletingCourse(course);
+                            }}
+                            className="p-1.5 bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl border border-slate-100 hover:border-rose-200 transition-all shadow-sm cursor-pointer animate-in fade-in zoom-in duration-200"
+                            title="Delete Course"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
                       <div className="space-y-3">
                         <div>
                           <span className="text-[9px] font-black text-[#4F3FF0] uppercase tracking-widest bg-[#4F3FF0]/6 px-2.5 py-0.75 rounded-md select-none">
-                            {getBatchNameForCourse(course.courseId, course.courseName)}
+                            {course.batchCode || getBatchNameForCourse(course.courseId, course.courseName)}
                           </span>
                         </div>
-                        <Link
-                          to={`/admin/courses/${course.courseId}`}
-                          className="font-black text-slate-800 text-base hover:text-[#4F3FF0] hover:underline transition-colors block leading-snug"
-                        >
+                        <span className="font-black text-slate-800 text-base group-hover:text-[#4F3FF0] group-hover:underline transition-colors block leading-snug">
                           {course.courseName}
-                        </Link>
+                        </span>
                         <p className="text-slate-500 text-xs font-semibold leading-relaxed line-clamp-4">
                           {course.description}
                         </p>
@@ -477,7 +496,7 @@ export const CoursesCalendars: React.FC = () => {
                           </span>
                         </div>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               )}
@@ -1029,6 +1048,67 @@ export const CoursesCalendars: React.FC = () => {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Custom Shadcn Delete Confirm Modal */}
+      {deletingCourse && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 animate-in fade-in duration-200 pointer-events-auto">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full mx-4 shadow-xl border border-[#E9EDF5] space-y-4 text-center animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center mx-auto">
+              <Trash2 className="h-6 w-6 text-rose-500" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="font-bold text-slate-800 text-base">Delete Course Template</h3>
+              <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+                Are you sure you want to delete the course template <strong className="text-slate-700">"{deletingCourse.courseName}"</strong>? This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingCourse(null)}
+                className="flex-1 px-4 py-2 border border-slate-200 hover:border-slate-350 text-slate-500 hover:text-slate-750 text-xs font-black rounded-xl transition-all cursor-pointer bg-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const courseId = deletingCourse.courseId;
+                  setDeletingCourse(null);
+                  try {
+                    setSubmitting(true);
+                    
+                    // Try deleting from database, ignore if it only exists in local storage
+                    await courseService.deleteCourse(courseId).catch((err) => {
+                      console.log("Course template not in database, checking local storage", err);
+                    });
+
+                    // Clean up from local storage custom course catalog
+                    const stored = localStorage.getItem('custom_courses');
+                    if (stored) {
+                      const customCourses = JSON.parse(stored);
+                      const filtered = customCourses.filter((c: any) => 
+                        c.courseId?.toUpperCase() !== courseId.toUpperCase()
+                      );
+                      localStorage.setItem('custom_courses', JSON.stringify(filtered));
+                    }
+
+                    setCourses(prev => prev.filter(c => c.courseId !== courseId));
+                    toast.success('Course deleted successfully!');
+                  } catch (err) {
+                    console.error(err);
+                    toast.error('Failed to delete course.');
+                  } finally {
+                    setSubmitting(false);
+                  }
+                }}
+                className="flex-1 px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-sm shadow-rose-100"
+              >
+                Confirm Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
