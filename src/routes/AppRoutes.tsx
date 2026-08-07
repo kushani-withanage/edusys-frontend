@@ -13,7 +13,10 @@ import CoursesCalendars from '@/pages/admin/CoursesCalendars';
 import AddCourse from '@/pages/admin/AddCourse';
 import Admissions from '@/pages/admin/Admissions';
 import FeeManagement from '@/pages/admin/FeeManagement';
-import Exams from '@/pages/admin/Exams';
+import { ExamListPage } from '@/pages/admin/ExamListPage';
+import { QuestionBankPage } from '@/pages/admin/QuestionBankPage';
+import { ExamBuilderPage } from '@/pages/admin/ExamBuilderPage';
+import { ExamResultsPage } from '@/pages/admin/ExamResultsPage';
 import Results from '@/pages/admin/Results';
 import Materials from '@/pages/admin/Materials';
 import CareerTasks from '@/pages/admin/CareerTasks';
@@ -25,6 +28,8 @@ import UpdateAssignment from '@/pages/admin/UpdateAssignment';
 
 import StudentDashboard from '@/pages/student/StudentDashboard';
 import StudentAcademics from '@/pages/student/StudentAcademics';
+import { ExamTakingPage } from '@/pages/student/ExamTakingPage';
+import { ExamResultPage } from '@/pages/student/ExamResultPage';
 import StudentCareer from '@/pages/student/StudentCareer';
 import StudentSettings from '@/pages/student/StudentSettings';
 import StudentCourseDetail from '@/pages/student/StudentCourseDetail';
@@ -72,7 +77,12 @@ function AppRoutes() {
           <Route path="/admin/course-access" element={<CourseAccess />} />
           <Route path="/admin/admissions" element={<Admissions />} />
           <Route path="/admin/fee-management" element={<FeeManagement />} />
-          <Route path="/admin/exams" element={<Exams />} />
+          <Route path="/admin/exams" element={<ExamListPage />} />
+          <Route path="/admin/exams/questions" element={<QuestionBankPage />} />
+          <Route path="/admin/exams/new" element={<ExamBuilderPage />} />
+          <Route path="/admin/exams/edit/:examId" element={<ExamBuilderPage />} />
+          <Route path="/admin/exams/:examId/analytics" element={<ExamResultsPage />} />
+          <Route path="/admin/exams/attempts/:attemptId/result" element={<ExamResultPage />} />
           <Route path="/admin/results" element={<Results />} />
           <Route path="/admin/materials" element={<Materials />} />
           <Route path="/admin/task-creator" element={<CareerTasks />} />
@@ -90,6 +100,8 @@ function AppRoutes() {
           <Route path="/student/courses/:courseId" element={<StudentCourseDetail />} />
           <Route path="/student/career" element={<StudentCareer />} />
           <Route path="/student/settings" element={<StudentSettings />} />
+          <Route path="/student/exams/:examId/take" element={<ExamTakingPage />} />
+          <Route path="/student/exams/attempts/:attemptId/result" element={<ExamResultPage />} />
         </Route>
       </Route>
 
@@ -107,7 +119,12 @@ function AppRoutes() {
         <Route element={<TeacherLayout />}>
           <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
           <Route path="/teacher/materials" element={<Materials />} />
-          <Route path="/teacher/exams" element={<Exams />} />
+          <Route path="/teacher/exams" element={<ExamListPage />} />
+          <Route path="/teacher/exams/questions" element={<QuestionBankPage />} />
+          <Route path="/teacher/exams/new" element={<ExamBuilderPage />} />
+          <Route path="/teacher/exams/edit/:examId" element={<ExamBuilderPage />} />
+          <Route path="/teacher/exams/:examId/analytics" element={<ExamResultsPage />} />
+          <Route path="/teacher/exams/attempts/:attemptId/result" element={<ExamResultPage />} />
           <Route path="/teacher/results" element={<Results />} />
         </Route>
       </Route>

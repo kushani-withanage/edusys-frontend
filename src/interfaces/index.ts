@@ -10,6 +10,7 @@ export interface Student {
   enrollmentDate?: string;
   dob?: string;
   gender?: string;
+  nic?: string;
 }
 
 export interface Teacher {
@@ -29,8 +30,7 @@ export interface Batch {
   startDate?: string;
   endDate?: string;
   status?: string;
-  teacher?: string;
-  courseName?: string;
+  courses?: Course[];
   studentCount?: number;
 }
 

@@ -8,7 +8,6 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { courseAccessService } from '@/services/courseAccessService';
 import { api } from '@/utils/api';
 import { calendarService } from '@/services/calendarService';
 import { gradeService } from '@/services/gradeService';
@@ -33,18 +32,19 @@ export const StudentDashboard: React.FC = () => {
   }, []);
 
   // --- States ---
-  const [points, setPoints] = useState(240);
-  const nextLevelPoints = 300;
+  const [points, setPoints] = useState(0);
+  const [nextLevelPoints, setNextLevelPoints] = useState(100);
+  const [currentLevelTitle, setCurrentLevelTitle] = useState('L1 Beginner');
   const [grades, setGrades] = useState<any[]>([]);
 
   useEffect(() => {
     if (user?.userId) {
-      api.get<any[]>('/api/v1/career-points-ledger')
+      api.get<any>('/api/v1/career/progress')
         .then(data => {
-          const studentLedger = data.filter((item: any) => item.studentId === user.userId);
-          const totalPoints = studentLedger.reduce((acc, curr) => acc + (curr.pointsAwarded || 0), 0);
-          if (totalPoints > 0) {
-            setPoints(totalPoints);
+          if (data) {
+            setPoints(data.totalPointsAtLevel || 0);
+            setNextLevelPoints(data.levelPointsRequired || 100);
+            setCurrentLevelTitle(data.currentLevelTitle || `L${data.currentLevelNumber || 1} Student`);
           }
         })
         .catch(err => console.error("Error loading career points:", err));
@@ -166,11 +166,11 @@ export const StudentDashboard: React.FC = () => {
           </span>
           <h2 className="text-2xl font-black font-heading mt-1">Software Trainee LMS Portal</h2>
           <p className="text-white/80 text-xs font-semibold leading-relaxed max-w-xl">
-            You are performing exceptionally! You've achieved L3 Developer status. Keep up the great work to reach L4: Engineer!
+            You are performing exceptionally! You've achieved {currentLevelTitle} status. Keep up the great work to reach the next level!
           </p>
           <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 border border-white/20 rounded-xl text-[10px] font-extrabold uppercase tracking-wider text-white select-none">
             <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-            Current Level: L3 Developer
+            Current Level: {currentLevelTitle}
           </div>
         </div>
 
@@ -209,7 +209,7 @@ export const StudentDashboard: React.FC = () => {
 
           <div className="bg-white/10 border border-white/15 px-3.5 py-1.5 rounded-xl w-full text-center">
             <p className="text-[9px] font-extrabold text-white leading-tight">
-              Climb to L4: Engineer in <span className="text-amber-300 font-black">60 points</span>.
+              Climb to next level in <span className="text-amber-300 font-black">{Math.max(0, nextLevelPoints - points)} points</span>.
             </p>
           </div>
         </div>

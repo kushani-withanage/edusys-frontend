@@ -14,12 +14,17 @@ export interface AuthRequest {
 }
 
 
-function getHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
+function getHeaders(extraHeaders: any = {}): Record<string, string> {
   const token = localStorage.getItem('edusys_token');
+  const headersInput = extraHeaders?.headers || extraHeaders || {};
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...extraHeaders,
+    ...headersInput,
   };
+  
+  if (headers['Content-Type'] === 'multipart/form-data') {
+    delete headers['Content-Type'];
+  }
   
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -59,11 +64,13 @@ export const api = {
     return handleResponse<T>(response);
   },
 
-  async post<T>(path: string, body: any): Promise<T> {
+  async post<T>(path: string, body: any, extraHeaders?: any): Promise<T> {
+    const isString = typeof body === 'string';
+    const isFormData = body instanceof FormData;
     const response = await fetch(`${API_BASE_URL}${path}`, {
       method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(body),
+      headers: getHeaders(isFormData ? { 'Content-Type': 'multipart/form-data' } : extraHeaders),
+      body: isString ? body : (isFormData ? body : JSON.stringify(body)),
     });
     return handleResponse<T>(response);
   },

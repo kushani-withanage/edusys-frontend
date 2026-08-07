@@ -1,24 +1,25 @@
 import { api } from '@/utils/api';
 
 export interface CareerLevelData {
-  levelId?: string;
-  levelName: string;
+  id?: string;
+  levelNumber: number;
+  title: string;
   description: string;
-  minPoints: number;
-  maxPoints: number;
+  pointsRequired: number;
+  isActive?: boolean;
 }
 
 export const pointsLevelService = {
   async getLevels() {
-    return api.get<any[]>('/api/v1/career-levels');
+    return api.get<CareerLevelData[]>('/api/v1/career-levels');
   },
 
   async createLevel(level: CareerLevelData) {
-    return api.post<any>('/api/v1/career-levels', level);
+    return api.post<CareerLevelData>('/api/v1/career-levels', level);
   },
 
   async updateLevel(levelId: string, level: CareerLevelData) {
-    return api.put<any>(`/api/v1/career-levels/${levelId}`, level);
+    return api.put<CareerLevelData>(`/api/v1/career-levels/${levelId}`, level);
   },
 
   async deleteLevel(levelId: string) {

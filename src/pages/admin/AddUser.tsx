@@ -20,6 +20,7 @@ export const AddUser: React.FC = () => {
     dob: '',
     enrollmentDate: '',
     gender: 'MALE',
+    nic: '',
     
     // Teacher specific
     specialization: '',
@@ -82,6 +83,9 @@ export const AddUser: React.FC = () => {
       if (!formData.enrollmentDate) {
         errors.enrollmentDate = 'Enrollment date is required';
       }
+      if (!formData.nic.trim()) {
+        errors.nic = 'NIC is required';
+      }
     } else if (formData.role === 'TEACHER') {
       if (!formData.specialization.trim()) {
         errors.specialization = 'Specialization is required';
@@ -133,7 +137,8 @@ export const AddUser: React.FC = () => {
           address: formData.address.trim(),
           dob: formData.dob,
           enrollmentDate: formData.enrollmentDate,
-          gender: formData.gender
+          gender: formData.gender,
+          nic: formData.nic.trim()
         });
       } else if (formData.role === 'TEACHER') {
         await api.post('/api/v1/teachers', {
@@ -312,6 +317,18 @@ export const AddUser: React.FC = () => {
                   disabled={loading}
                 />
               </div>
+
+              {/* NIC */}
+              <TextField
+                label="NIC Number"
+                name="nic"
+                value={formData.nic}
+                onChange={handleChange}
+                placeholder="e.g. 200456123987 or 991234567V"
+                error={validationErrors.nic}
+                required
+                disabled={loading}
+              />
 
               {/* Address */}
               <TextField

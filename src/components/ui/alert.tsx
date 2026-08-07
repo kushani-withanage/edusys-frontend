@@ -4,15 +4,15 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/utils/utils"
 
 const alertVariants = cva(
-  "group/alert relative w-full rounded-2xl border p-4 shadow-[0_10px_30px_rgba(0,0,0,0.06)] backdrop-blur-md flex items-start gap-3 border-l-4 text-[#111111] transition-all duration-300",
+  "group/alert relative w-full rounded-2xl border p-4 shadow-[0_12px_40px_rgba(0,0,0,0.12)] flex items-start gap-3 border-l-4 text-[#111111] transition-all duration-300",
   {
     variants: {
       variant: {
-        default: "bg-slate-50/90 border-[#dee2e6]/80 border-l-slate-500 text-slate-800",
-        destructive: "bg-rose-50/90 border-[#dee2e6]/80 border-l-rose-500 text-rose-800",
-        success: "bg-emerald-50/90 border-[#dee2e6]/80 border-l-emerald-500 text-emerald-800",
-        warning: "bg-amber-50/90 border-[#dee2e6]/80 border-l-amber-500 text-amber-800",
-        info: "bg-sky-50/90 border-[#dee2e6]/80 border-l-sky-500 text-sky-800",
+        default: "bg-[#F8FAFC] border-[#E2E8F0] border-l-slate-500 text-slate-850",
+        destructive: "bg-[#FFF5F5] border-[#FEE2E2] border-l-rose-500 text-rose-900",
+        success: "bg-[#F0FDF4] border-[#DCFCE7] border-l-emerald-500 text-emerald-950",
+        warning: "bg-[#FFFBEB] border-[#FEF3C7] border-l-amber-500 text-amber-950",
+        info: "bg-[#F0F9FF] border-[#E0F2FE] border-l-sky-500 text-sky-950",
       },
     },
     defaultVariants: {

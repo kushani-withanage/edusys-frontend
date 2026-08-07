@@ -196,6 +196,14 @@ export const Admissions: React.FC = () => {
     if (genderInput === null) return; // User cancelled
     const gender = genderInput.trim().toUpperCase() === "FEMALE" ? "FEMALE" : "MALE";
 
+    const nicInput = window.prompt(`Enter NIC Number for ${inq.applicantName}:`, "");
+    if (nicInput === null) return; // User cancelled
+    const nic = nicInput.trim();
+    if (!nic) {
+      alert("NIC Number is required to enroll student.");
+      return;
+    }
+
     try {
       setActionInquiryId(inq.inquiryId);
       
@@ -203,7 +211,8 @@ export const Admissions: React.FC = () => {
         inq.inquiryId,
         inq.applicantName,
         inq.contactInfo,
-        gender
+        gender,
+        nic
       );
 
       // Remove from inquiries list
@@ -218,7 +227,8 @@ export const Admissions: React.FC = () => {
         status: 'ACTIVE',
         regNo: regNo,
         enrollmentDate: new Date().toISOString().split('T')[0],
-        gender: gender
+        gender: gender,
+        nic: nic
       };
       setStudents(prev => [newStudent, ...prev]);
 
@@ -512,6 +522,7 @@ export const Admissions: React.FC = () => {
                       <tr className="bg-[#F8FAFC]/50 border-b border-[#E9EDF5] text-slate-450 text-[10px] font-extrabold tracking-wider uppercase">
                         <th className="px-6 py-4">REG NO</th>
                         <th className="px-6 py-4">STUDENT NAME</th>
+                        <th className="px-6 py-4">NIC</th>
                         <th className="px-6 py-4">EMAIL</th>
                         <th className="px-6 py-4">GENDER</th>
                         <th className="px-6 py-4">STATUS</th>
@@ -528,7 +539,10 @@ export const Admissions: React.FC = () => {
                           <td className="px-6 py-4.5 font-extrabold text-slate-800 text-sm">
                             {student.fullName}
                           </td>
-                          <td className="px-6 py-4.5 text-slate-505 text-sm font-semibold">
+                          <td className="px-6 py-4.5 text-slate-600 text-xs font-mono font-bold">
+                            {student.nic || 'N/A'}
+                          </td>
+                          <td className="px-6 py-4.5 text-slate-500 text-sm font-semibold">
                             <span className="flex items-center gap-1.5">
                               <Mail className="h-3.5 w-3.5 text-slate-400" />
                               {student.email}

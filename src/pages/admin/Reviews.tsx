@@ -1,216 +1,228 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Loader2, 
   AlertCircle, 
+  BookOpen,
   CheckCircle,
-  FileText,
-  Save,
-  Check,
-  XCircle,
+  Trophy,
+  Activity,
+  ArrowLeft,
+  X,
+  AlertTriangle,
   ClipboardCheck,
-  MessageSquare
+  ChevronRight
 } from 'lucide-react';
-import Button from '@/components/common/Button';
-import { reviewService, type CareerSubmissionData } from '@/services/reviewService';
-import { studentService } from '@/services/studentService';
-import { careerTaskService } from '@/services/careerTaskService';
-import type { Student, CareerTask, PortfolioSubmission } from '@/interfaces';
+import { careerSubmissionService, type CareerSubmissionData } from '@/services/careerSubmissionService';
+import { careerTaskService, type CareerTaskData } from '@/services/careerTaskService';
+import { pointsLevelService, type CareerLevelData } from '@/services/pointsLevelService';
+import { batchService } from '@/services/batchService';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { SubmissionsTable } from '@/components/common/SubmissionsTable';
+import { toast } from '@/utils/toast';
 
 export const Reviews: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
-
   // --- States ---
-  const [submissions, setSubmissions] = useState<PortfolioSubmission[]>([]);
+  const [batches, setBatches] = useState<any[]>([]);
+  const [levels, setLevels] = useState<CareerLevelData[]>([]);
+  const [tasks, setTasks] = useState<CareerTaskData[]>([]);
+  
+  // Selection
+  const [selectedBatchId, setSelectedBatchId] = useState('');
+  const [selectedLevelId, setSelectedLevelId] = useState('');
+  const [selectedTask, setSelectedTask] = useState<CareerTaskData | null>(null);
+
+  // Table rows data
+  const [batchStudents, setBatchStudents] = useState<any[]>([]);
+  const [taskSubmissions, setTaskSubmissions] = useState<CareerSubmissionData[]>([]);
+
+  // Statistics
+  const [statsData, setStatsData] = useState<{
+    industryReadyCount: number;
+    levelStats: Array<{
+      levelId: string;
+      levelNumber: number;
+      title: string;
+      completedCount: number;
+    }>;
+  } | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Review/Assess Modal
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [activeStudent, setActiveStudent] = useState<any | null>(null);
+  const [activeSubmission, setActiveSubmission] = useState<CareerSubmissionData | null>(null);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState('');
 
-  // --- Modals State ---
-  const [selectedSubmission, setSelectedSubmission] = useState<PortfolioSubmission | null>(null);
-  const [showAssessModal, setShowAssessModal] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-
-  // --- Form States ---
-  const [assessForm, setAssessForm] = useState({
-    comments: '',
-    decision: 'APPROVED' // APPROVED or REJECTED
+  const [reviewForm, setReviewForm] = useState({
+    status: 'APPROVED', // APPROVED, REJECTED, REVISION_REQUESTED
+    points: 0,
+    comment: ''
   });
 
-  // --- Mock Fallbacks (Sandbox visualization mode) ---
-  const defaultStudents = useMemo<Student[]>(() => [
-    { studentId: 'stu-1', fullName: 'Sachin Samarawickrama', email: 'sachin@edusys.edu' },
-    { studentId: 'stu-2', fullName: 'Pawara Minimuthu', email: 'pawara@edusys.edu' },
-    { studentId: 'stu-3', fullName: 'Sharadha Madusinghe', email: 'sharadha@edusys.edu' }
-  ], []);
-
-  const defaultTasks = useMemo<CareerTask[]>(() => [
-    { taskId: 't-1', title: 'Build responsive App Layout', pointValue: 150, rubricCriteria: 'Level L3' },
-    { taskId: 't-2', title: 'Integrate OAuth security flow', pointValue: 250, rubricCriteria: 'Level L5' },
-    { taskId: 't-3', title: 'Complete Git Workflow & Pull Requests', pointValue: 50, rubricCriteria: 'Level L2' }
-  ], []);
-
-  const defaultSubmissions = useMemo<PortfolioSubmission[]>(() => [
-    {
-      submissionId: 'sub-1',
-      taskId: 't-1',
-      studentId: 'stu-1',
-      status: 'PENDING',
-      studentName: 'Sachin Samarawickrama',
-      studentEmail: 'sachin@edusys.edu',
-      taskTitle: 'Build responsive App Layout',
-      targetLevel: 'Level L3',
-      pointValue: 150
-    },
-    {
-      submissionId: 'sub-2',
-      taskId: 't-2',
-      studentId: 'stu-3',
-      status: 'PENDING',
-      studentName: 'Sharadha Madusinghe',
-      studentEmail: 'sharadha@edusys.edu',
-      taskTitle: 'Integrate OAuth security flow',
-      targetLevel: 'Level L5',
-      pointValue: 250
-    },
-    {
-      submissionId: 'sub-3',
-      taskId: 't-3',
-      studentId: 'stu-2',
-      status: 'APPROVED',
-      studentName: 'Pawara Minimuthu',
-      studentEmail: 'pawara@edusys.edu',
-      taskTitle: 'Complete Git Workflow & Pull Requests',
-      targetLevel: 'Level L2',
-      pointValue: 50,
-      feedback: 'Excellent work on git branching and conflict resolution!'
-    }
-  ], []);
-
-  // --- Fetch API Data ---
-  const fetchSubmissionsData = async () => {
+  // Fetch initial stats, levels, batches
+  const fetchInitialData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const [subsData, studentsData, tasksData] = await Promise.all([
-        reviewService.getSubmissions(),
-        studentService.getStudents().catch(() => []),
-        careerTaskService.getTasks().catch(() => [])
+      const [levelsData, batchesData] = await Promise.all([
+        pointsLevelService.getLevels(),
+        batchService.getBatches()
       ]);
 
-      const resolvedStudents = studentsData.length > 0 ? studentsData : defaultStudents;
-      const resolvedTasks = tasksData.length > 0 ? tasksData : defaultTasks;
+      setLevels(levelsData || []);
+      setBatches(batchesData || []);
 
-      // Map backend CareerSubmissionDTOs to resolved portfolio items
-      const mapped: PortfolioSubmission[] = subsData.map((item, idx) => {
-        const student = resolvedStudents.find((s: any) => s.studentId === item.studentId) || defaultStudents[idx % defaultStudents.length];
-        const task = resolvedTasks.find((t: any) => t.taskId === item.taskId) || defaultTasks[idx % defaultTasks.length];
+      // Load stats
+      try {
+        const fetchedStats = await fetchStats();
+        setStatsData(fetchedStats);
+      } catch (e) {
+        console.error('Failed to load stats', e);
+      }
 
-        return {
-          submissionId: item.submissionId,
-          taskId: item.taskId,
-          studentId: item.studentId,
-          status: item.status || 'PENDING',
-          submittedFile: item.submittedFile,
-          submitDate: item.submitDate,
-          studentName: student.fullName || student.name || 'Student',
-          studentEmail: student.email || 'student@edusys.edu',
-          taskTitle: task.title || 'Task Portfolio',
-          targetLevel: task.rubricCriteria || 'Level L3',
-          pointValue: task.pointValue || 100
-        };
-      });
-
-      setSubmissions(mapped.length > 0 ? mapped : defaultSubmissions);
+      if (batchesData && batchesData.length > 0) {
+        setSelectedBatchId(batchesData[0].batchId);
+      }
+      if (levelsData && levelsData.length > 0) {
+        setSelectedLevelId(levelsData[0].id || '');
+      }
     } catch (err: any) {
       console.error(err);
-      setError('Could not connect to backend server. Running in simulated sandbox mode.');
-      setSubmissions(defaultSubmissions);
+      setError('Could not connect to backend server. Make sure the server is online.');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchSubmissionsData();
-  }, [defaultStudents, defaultTasks, defaultSubmissions]);
-
-  // --- Filtered Submissions ---
-  const pendingSubmissions = useMemo(() => {
-    return submissions.filter(s => s.status === 'PENDING');
-  }, [submissions]);
-
-  const reviewedSubmissions = useMemo(() => {
-    return submissions.filter(s => s.status === 'APPROVED' || s.status === 'REJECTED');
-  }, [submissions]);
-
-  // --- Dynamic Stats calculation ---
-  const stats = useMemo(() => {
-    const pendingCount = pendingSubmissions.length;
-    const reviewedCount = reviewedSubmissions.length;
-    const totalCount = pendingCount + reviewedCount;
-    
-    // Evaluation ratio
-    const ratio = totalCount > 0 ? Math.round((reviewedCount / totalCount) * 100) : 0;
-    
-    return {
-      pendingCount,
-      reviewedCount,
-      ratio
-    };
-  }, [pendingSubmissions, reviewedSubmissions]);
-
-  // --- Assess Click Handlers ---
-  const handleAssessClick = (sub: PortfolioSubmission) => {
-    setSelectedSubmission(sub);
-    setAssessForm({
-      comments: '',
-      decision: 'APPROVED'
+  const fetchStats = async () => {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/api/v1/career/stats`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
     });
-    setShowAssessModal(true);
+    if (!response.ok) {
+      throw new Error('Stats load failed');
+    }
+    return response.json();
   };
 
-  const handleAssessSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedSubmission) return;
+  useEffect(() => {
+    fetchInitialData();
+  }, []);
 
+  // Fetch tasks when selected level changes
+  useEffect(() => {
+    if (!selectedLevelId) return;
+    const fetchTasks = async () => {
+      try {
+        const list = await careerTaskService.getActiveTasksByLevel(selectedLevelId);
+        setTasks(list || []);
+        // Reset selected task
+        setSelectedTask(null);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchTasks();
+  }, [selectedLevelId]);
+
+  // Load students & submissions when a task is opened
+  const handleOpenTaskSubmissions = async (task: CareerTaskData) => {
+    if (!selectedBatchId) {
+      toast.error('Please select a batch first.');
+      return;
+    }
+    
     try {
-      setSubmitting(true);
-      const payload: CareerSubmissionData = {
-        taskId: selectedSubmission.taskId,
-        studentId: selectedSubmission.studentId,
-        status: assessForm.decision,
-        submittedFile: selectedSubmission.submittedFile || 'evaluated_portfolio'
-      };
+      setLoading(true);
+      setSelectedTask(task);
 
-      const updated = await reviewService.updateSubmissionStatus(selectedSubmission.submissionId, payload);
-      
-      // Update local state list
-      setSubmissions(prev => prev.map(s => s.submissionId === selectedSubmission.submissionId ? {
-        ...s,
-        status: updated.status,
-        feedback: assessForm.comments || 'Evaluated.'
-      } : s));
+      // 1. Get students of selected batch
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/api/v1/batches/${selectedBatchId}/students`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch batch students.');
+      const students = await response.json();
 
-      setShowAssessModal(false);
-      alert('Portfolio submission assessed successfully!');
+      // 2. Get submissions for this task
+      const submissions = await careerSubmissionService.getSubmissions(undefined, task.id);
+
+      setBatchStudents(students || []);
+      // Filter submissions only for students in this batch
+      const studentIds = new Set(students.map((s: any) => s.userId));
+      const filteredSubmissions = (submissions || []).filter(s => studentIds.has(s.studentId));
+
+      setTaskSubmissions(filteredSubmissions);
     } catch (err: any) {
       console.error(err);
-      // Fallback
-      setSubmissions(prev => prev.map(s => s.submissionId === selectedSubmission.submissionId ? {
-        ...s,
-        status: assessForm.decision,
-        feedback: assessForm.comments || 'Evaluated.'
-      } : s));
-      setShowAssessModal(false);
-      alert('Simulation: Portfolio assessed locally.');
+      toast.error('Failed to load submissions list.');
     } finally {
-      setSubmitting(false);
+      setLoading(false);
+    }
+  };
+
+  // Open review modal
+  const handleOpenReview = (student: any, sub: any) => {
+    setActiveStudent(student);
+    setActiveSubmission(sub);
+    setReviewError('');
+    setReviewForm({
+      status: 'APPROVED',
+      points: selectedTask?.pointsValue || 0,
+      comment: ''
+    });
+    setShowReviewModal(true);
+  };
+
+  // Save review
+  const handleSaveReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeSubmission?.id) return;
+    setReviewError('');
+
+    const pts = Number(reviewForm.points);
+    if (reviewForm.status === 'APPROVED') {
+      if (pts < 0 || pts > (selectedTask?.pointsValue || 0)) {
+        setReviewError(`Points must be between 0 and ${selectedTask?.pointsValue}`);
+        return;
+      }
+    }
+
+    try {
+      setReviewSubmitting(true);
+      await careerSubmissionService.reviewSubmission(
+        activeSubmission.id,
+        reviewForm.status,
+        reviewForm.status === 'APPROVED' ? pts : 0,
+        reviewForm.comment
+      );
+      toast.success('Review decision saved successfully!');
+      setShowReviewModal(false);
+      
+      // Refresh statistics & submissions list
+      const stats = await fetchStats();
+      setStatsData(stats);
+      if (selectedTask) {
+        handleOpenTaskSubmissions(selectedTask);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setReviewError(err.message || 'Failed to submit review.');
+    } finally {
+      setReviewSubmitting(false);
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-left max-w-5xl mx-auto font-sans pb-10 select-none">
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-5 w-5 text-rose-500 mt-0.5 shrink-0" />
@@ -221,305 +233,276 @@ export const Reviews: React.FC = () => {
       {/* Header Panel */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#E9EDF5] pb-6">
         <div>
-          <h1 className="text-[18px] md:text-xl lg:text-2xl font-semibold text-slate-800 tracking-tight flex items-center gap-2 font-heading">
-            <ClipboardCheck className="h-7 w-7 text-[#4F3FF0]" />
-            Review Queue Dashboard
+          <h1 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+            <ClipboardCheck className="h-6 w-6 text-[#4F3FF0]" />
+            {selectedTask ? (
+              <>
+                <button 
+                  onClick={() => setSelectedTask(null)}
+                  className="hover:text-[#4F3FF0] transition-colors"
+                >
+                  Reviewer Workflow
+                </button>
+                <ChevronRight className="h-5 w-5 text-slate-400 shrink-0" />
+                <span className="text-slate-500 font-extrabold text-lg truncate max-w-sm">{selectedTask.title}</span>
+              </>
+            ) : (
+              'Reviewer Workflow'
+            )}
           </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Assess portfolios, record grading rubrics, and award Career Scale levels L1-L7.
+          <p className="text-slate-500 text-xs mt-1 font-semibold">
+            Evaluate student deliverables, award progression points, and view stats.
           </p>
         </div>
       </div>
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start select-none">
-        
-        <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-6">
-          {/* Card 1: PENDING REVIEWS */}
-          <div className="bg-white border border-[#E9EDF5] p-5 rounded-2xl shadow-sm flex items-center justify-between gap-4">
-            <div className="space-y-1.5">
-              <span className="text-[10px] font-extrabold text-slate-400 tracking-wider uppercase block">PENDING REVIEWS</span>
-              <span className="text-2xl font-black text-slate-800 block font-heading">{stats.pendingCount}</span>
+      {!selectedTask ? (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Landing: Stats Banner */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+            {/* Industry Ready Banner */}
+            <div className="md:col-span-1 bg-slate-900 border border-slate-850 p-6 rounded-3xl text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
+              <div className="absolute -right-6 -bottom-6 opacity-5">
+                <Trophy className="h-32 w-32" />
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase text-indigo-400 tracking-widest">
+                  Industry Readiness
+                </span>
+                <h2 className="text-3xl font-black font-mono">
+                  {statsData?.industryReadyCount || 0}
+                </h2>
+                <p className="text-xs text-slate-400 font-bold">
+                  Students cleared at final career stage level.
+                </p>
+              </div>
+              <div className="pt-4">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-500/10 border border-indigo-500/30 rounded-xl text-xs font-bold text-indigo-400 select-none">
+                  <CheckCircle className="h-3.5 w-3.5" /> Industry Ready
+                </span>
+              </div>
             </div>
-            <div className="p-3 bg-amber-50 text-amber-500 rounded-xl shrink-0">
-              <FileText className="h-5 w-5" />
+
+            {/* Level stats mapping list */}
+            <div className="md:col-span-2 bg-white border border-[#E9EDF5] p-6 rounded-3xl shadow-sm space-y-4">
+              <h3 className="text-[10px] font-black uppercase tracking-wider text-slate-455 flex items-center gap-1.5 select-none">
+                <Activity className="h-4 w-4 text-[#4F3FF0]" /> Student Progression Stages
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {statsData?.levelStats && statsData.levelStats.length > 0 ? (
+                  statsData.levelStats.map(lvl => (
+                    <div key={lvl.levelId} className="p-4 border border-[#E9EDF5] rounded-2xl hover:border-slate-350 transition-all bg-slate-50/50 space-y-2">
+                      <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 rounded-md text-[9px] font-black text-[#4F3FF0]">
+                        Level L{lvl.levelNumber}
+                      </span>
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-black text-slate-900 truncate" title={lvl.title}>{lvl.title}</p>
+                        <p className="text-[10px] text-slate-450 font-bold">{lvl.completedCount} Active / Cleared</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="col-span-4 py-8 text-center text-slate-400 font-bold text-xs uppercase">
+                    Configure Levels to display completion statistics.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Card 2: REVIEWED TASKS */}
-          <div className="bg-white border border-[#E9EDF5] p-5 rounded-2xl shadow-sm flex items-center justify-between gap-4">
-            <div className="space-y-1.5">
-              <span className="text-[10px] font-extrabold text-slate-400 tracking-wider uppercase block">REVIEWED TASKS</span>
-              <span className="text-2xl font-black text-slate-800 block font-heading">{stats.reviewedCount}</span>
+          {/* Selector filters bar */}
+          <div className="bg-white border border-[#E9EDF5] rounded-3xl p-4.5 shadow-sm flex flex-col sm:flex-row items-center gap-4 select-none">
+            <div className="flex items-center gap-2 font-bold text-slate-700 text-xs w-full sm:w-auto">
+              <span className="text-[10px] font-black text-slate-455 uppercase tracking-wider">Select Batch:</span>
+              <select
+                value={selectedBatchId}
+                onChange={(e) => setSelectedBatchId(e.target.value)}
+                className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-[#4F3FF0] cursor-pointer w-full sm:w-48"
+              >
+                {batches.map(b => (
+                  <option key={b.batchId} value={b.batchId}>{b.batchName}</option>
+                ))}
+              </select>
             </div>
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl shrink-0">
-              <CheckCircle className="h-5 w-5" />
+
+            <div className="flex items-center gap-2 font-bold text-slate-700 text-xs w-full sm:w-auto">
+              <span className="text-[10px] font-black text-slate-455 uppercase tracking-wider">Select Level:</span>
+              <select
+                value={selectedLevelId}
+                onChange={(e) => setSelectedLevelId(e.target.value)}
+                className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-[#4F3FF0] cursor-pointer w-full sm:w-48"
+              >
+                {levels.map(l => (
+                  <option key={l.id} value={l.id}>L{l.levelNumber} - {l.title}</option>
+                ))}
+              </select>
             </div>
           </div>
 
-          {/* Card 3: EVALUATION RATIO */}
-          <div className="bg-white border border-[#E9EDF5] p-5 rounded-2xl shadow-sm flex items-center justify-between gap-4">
-            <div className="space-y-1.5">
-              <span className="text-[10px] font-extrabold text-slate-400 tracking-wider uppercase block">EVALUATION RATIO</span>
-              <span className="text-2xl font-black text-slate-800 block font-heading">{stats.ratio}%</span>
-              <span className="text-[10px] font-semibold text-slate-450 block">{stats.reviewedCount} reviewed : {stats.pendingCount} pending</span>
+          {/* Tasks Grid */}
+          <div className="space-y-4">
+            <div>
+              <h3 className="font-extrabold text-slate-800 text-sm font-heading">Tasks queue</h3>
+              <p className="text-slate-455 text-[10px] font-semibold mt-0.5">Click a task to grade batch student submissions.</p>
             </div>
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0">
-              <Save className="h-5 w-5" />
-            </div>
+
+            {tasks.length === 0 ? (
+              <div className="text-center py-16 bg-slate-50 border border-dashed border-slate-205 rounded-3xl">
+                <BookOpen className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                <h3 className="font-bold text-slate-500 text-xs uppercase tracking-wider">No active tasks defined for this level</h3>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {tasks.map(task => (
+                  <div 
+                    key={task.id} 
+                    className="bg-white border border-[#E9EDF5] hover:border-[#4F3FF0]/60 p-6 rounded-3xl shadow-xs transition-all relative flex flex-col justify-between h-48 hover:shadow-md cursor-pointer select-none"
+                    onClick={() => handleOpenTaskSubmissions(task)}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-start">
+                        <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 rounded text-[9px] font-black text-[#4F3FF0]">
+                          +{task.pointsValue} PTS
+                        </span>
+                        <span className="text-[9px] font-black uppercase text-slate-400">
+                          {task.submissionType}
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-extrabold text-slate-800 line-clamp-1">{task.title}</h4>
+                      <p className="text-[10px] text-slate-450 font-medium leading-relaxed line-clamp-3">
+                        {task.description}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[#4F3FF0] hover:text-[#3D2ED0] font-black text-[10px] uppercase tracking-wider pt-2 border-t border-slate-50 select-none">
+                      Review Deliverables <ArrowLeft className="h-3.5 w-3.5 rotate-180" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Card 4: Circular levels gauge chart */}
-        <div className="bg-white border border-[#E9EDF5] p-5 rounded-2xl shadow-sm flex flex-col items-center justify-center text-center">
-          <span className="text-[10px] font-extrabold text-slate-400 tracking-wider uppercase mb-3 block">EVALUATED LEVELS RATIO</span>
-          
-          <div className="relative flex items-center justify-center">
-            {/* Visual Circular ring */}
-            <svg className="w-24 h-24 transform -rotate-90">
-              <circle
-                cx="48"
-                cy="48"
-                r="36"
-                stroke="#E2E8F0"
-                strokeWidth="8"
-                fill="transparent"
-              />
-              <circle
-                cx="48"
-                cy="48"
-                r="36"
-                stroke="#4F3FF0"
-                strokeWidth="8"
-                fill="transparent"
-                strokeDasharray="226"
-                strokeDashoffset={226 - (226 * stats.ratio) / 100}
-                className="transition-all duration-500 ease-out"
-              />
-            </svg>
-            <div className="absolute flex flex-col items-center justify-center">
-              <span className="text-sm font-black text-slate-800 font-heading">L3/L4</span>
-              <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">PRIMARY</span>
-            </div>
+      ) : (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Back button */}
+          <div>
+            <button
+              onClick={() => setSelectedTask(null)}
+              className="px-4 py-2 border border-slate-200 hover:border-slate-350 text-slate-650 hover:text-slate-900 text-xs font-black rounded-xl transition-all cursor-pointer bg-white flex items-center gap-1.5 shadow-sm"
+            >
+              <ArrowLeft className="h-4 w-4" /> Back to Dashboard
+            </button>
           </div>
+
+          {/* Submissions list table for task */}
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-3 bg-white border border-[#E9EDF5] rounded-3xl">
+              <Loader2 className="h-8 w-8 text-[#4F3FF0] animate-spin" />
+              <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">Syncing submissions queue...</p>
+            </div>
+          ) : (
+            <SubmissionsTable
+              title="Career Task Review"
+              subtitle={`Task: ${selectedTask.title} (Max: ${selectedTask.pointsValue} pts)`}
+              students={batchStudents}
+              submissions={taskSubmissions}
+              isCareerScale={true}
+              onReview={(student, sub) => handleOpenReview(student, sub)}
+            />
+          )}
         </div>
+      )}
 
-      </div>
-
-      {/* Tabs Selector Bar */}
-      <div className="flex border-b border-[#E2E8F0] gap-8 select-none">
-        <button
-          onClick={() => setActiveTab('pending')}
-          className={`py-3.5 text-[13px] font-bold tracking-wide transition-all relative cursor-pointer outline-none ${
-            activeTab === 'pending' 
-              ? 'text-[#4F3FF0] font-extrabold' 
-              : 'text-slate-450 hover:text-slate-700'
-          }`}
-        >
-          Pending Reviews ({stats.pendingCount})
-          {activeTab === 'pending' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.75 bg-[#4F3FF0] rounded-t-full" />
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('history')}
-          className={`py-3.5 text-[13px] font-bold tracking-wide transition-all relative cursor-pointer outline-none ${
-            activeTab === 'history' 
-              ? 'text-[#4F3FF0] font-extrabold' 
-              : 'text-slate-450 hover:text-slate-700'
-          }`}
-        >
-          Reviewed History ({stats.reviewedCount})
-          {activeTab === 'history' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.75 bg-[#4F3FF0] rounded-t-full" />
-          )}
-        </button>
-      </div>
-
-      {/* Table Data */}
-      <div className="bg-white border border-[#E9EDF5] rounded-2xl overflow-hidden shadow-sm">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <Loader2 className="h-8 w-8 text-[#4F3FF0] animate-spin" />
-            <p className="text-slate-500 font-medium text-sm">Loading Review Queue...</p>
-          </div>
-        ) : activeTab === 'pending' ? (
-          /* --- PENDING REVIEWS TAB --- */
-          pendingSubmissions.length === 0 ? (
-            <div className="text-center py-20">
-              <CheckCircle className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
-              <h3 className="font-extrabold text-slate-800 text-sm">Review queue is empty!</h3>
-              <p className="text-slate-400 text-xs mt-1">All portfolios have been assessed.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left">
-                <thead>
-                  <tr className="bg-[#F8FAFC]/50 border-b border-[#E9EDF5] text-slate-450 text-[10px] font-extrabold tracking-wider uppercase">
-                    <th className="px-6 py-4">STUDENT NAME</th>
-                    <th className="px-6 py-4">TASK PORTFOLIO</th>
-                    <th className="px-6 py-4">DESIGNATED LEVEL</th>
-                    <th className="px-6 py-4">REWARD POINTS</th>
-                    <th className="px-6 py-4 text-right">ACTIONS</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E9EDF5] text-slate-800 text-xs font-semibold">
-                  {pendingSubmissions.map(sub => (
-                    <tr key={sub.submissionId} className="hover:bg-slate-50/20 transition-colors duration-150">
-                      <td className="px-6 py-5">
-                        <div className="font-extrabold text-slate-800 text-xs">{sub.studentName}</div>
-                        <div className="text-[10px] text-slate-450 mt-0.5 font-semibold">{sub.studentEmail}</div>
-                      </td>
-                      <td className="px-6 py-5 text-slate-700 font-extrabold max-w-sm truncate">
-                        {sub.taskTitle}
-                      </td>
-                      <td className="px-6 py-5">
-                        <span className="inline-flex items-center px-3 py-1 text-[10px] font-bold text-[#4F3FF0] bg-indigo-50 border border-indigo-100 rounded-full select-none">
-                          {sub.targetLevel}
-                        </span>
-                      </td>
-                      <td className="px-6 py-5 text-amber-600 font-black text-xs uppercase">
-                        +{sub.pointValue} pts
-                      </td>
-                      <td className="px-6 py-5 text-right select-none">
-                        <button
-                          onClick={() => handleAssessClick(sub)}
-                          className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-extrabold rounded-xl transition-all cursor-pointer shadow-sm outline-none"
-                        >
-                          Assess Work
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
-        ) : (
-          /* --- REVIEWED HISTORY TAB --- */
-          reviewedSubmissions.length === 0 ? (
-            <div className="text-center py-20 text-slate-400 text-xs">
-              No portfolios evaluated in this session.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left">
-                <thead>
-                  <tr className="bg-[#F8FAFC]/50 border-b border-[#E9EDF5] text-slate-450 text-[10px] font-extrabold tracking-wider uppercase">
-                    <th className="px-6 py-4">STUDENT NAME</th>
-                    <th className="px-6 py-4">TASK PORTFOLIO</th>
-                    <th className="px-6 py-4">EVALUATION DECISION</th>
-                    <th className="px-6 py-4">FEEDBACK / CRITERIA LOG</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E9EDF5] text-slate-800 text-xs font-semibold">
-                  {reviewedSubmissions.map(sub => (
-                    <tr key={sub.submissionId} className="hover:bg-slate-50/20 transition-colors duration-150">
-                      <td className="px-6 py-5">
-                        <div className="font-extrabold text-slate-800 text-xs">{sub.studentName}</div>
-                        <div className="text-[10px] text-slate-450 mt-0.5 font-semibold">{sub.studentEmail}</div>
-                      </td>
-                      <td className="px-6 py-5 text-slate-700 font-extrabold max-w-sm truncate">
-                        {sub.taskTitle}
-                      </td>
-                      <td className="px-6 py-5">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 border text-[10px] font-bold rounded-full select-none leading-none ${
-                          sub.status === 'APPROVED'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-rose-50 text-rose-700 border-rose-200'
-                        }`}>
-                          {sub.status === 'APPROVED' ? (
-                            <>
-                              <Check className="h-3.5 w-3.5 shrink-0" />
-                              Approved
-                            </>
-                          ) : (
-                            <>
-                              <XCircle className="h-3.5 w-3.5 shrink-0" />
-                              Revision Requested
-                            </>
-                          )}
-                        </span>
-                      </td>
-                      <td className="px-6 py-5 text-slate-655 font-semibold leading-relaxed max-w-xs">
-                        <span className="flex items-start gap-1.5">
-                          <MessageSquare className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
-                          {sub.feedback || 'No comments left.'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
-        )}
-      </div>
-
-      {/* --- EVALUATION / ASSESS MODAL --- */}
-      {showAssessModal && selectedSubmission && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="bg-white border border-[#E9EDF5] rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
-            <h3 className="text-lg font-extrabold text-slate-805 mb-1 font-heading">Evaluate Task Portfolio</h3>
-            <p className="text-slate-450 text-xs font-semibold mb-5 select-none leading-none">Review student deliverables and award career points.</p>
-            
-            <div className="mb-5 p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[11px] font-bold text-slate-500 space-y-2">
-              <div className="flex justify-between">
-                <span>Student Name:</span>
-                <span className="text-slate-800">{selectedSubmission.studentName}</span>
+      {/* Review Assess dialog Modal */}
+      {showReviewModal && activeStudent && activeSubmission && selectedTask && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 animate-in fade-in duration-200 pointer-events-auto">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full mx-4 shadow-2xl border border-[#E9EDF5] space-y-4 text-left animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Review Deliverable</h3>
+                <p className="text-[10px] text-slate-455 font-bold mt-0.5">{activeStudent.fullName}</p>
               </div>
-              <div className="flex justify-between">
-                <span>Task Portfolio:</span>
-                <span className="text-slate-800 max-w-[220px] truncate">{selectedSubmission.taskTitle}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Designated Level:</span>
-                <span className="text-[#4F3FF0]">{selectedSubmission.targetLevel}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Reward Weight:</span>
-                <span className="text-amber-600">+{selectedSubmission.pointValue} PTS</span>
-              </div>
+              <button 
+                onClick={() => setShowReviewModal(false)}
+                className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-full transition-colors cursor-pointer"
+              >
+                <X className="h-4.5 w-4.5" />
+              </button>
             </div>
 
-            <form onSubmit={handleAssessSubmit} className="space-y-4 font-sans">
-              
+            {reviewError && (
+              <div className="p-3 bg-rose-50 border border-rose-100 text-rose-700 text-xs font-semibold rounded-xl flex items-center gap-1.5">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>{reviewError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveReview} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold tracking-wider uppercase text-slate-700">Comments / Evaluation Feedback *</label>
-                <textarea
-                  value={assessForm.comments}
-                  onChange={e => setAssessForm(prev => ({ ...prev, comments: e.target.value }))}
-                  placeholder="Leave feedback on student's repository and code structure..."
-                  className="w-full pl-4 pr-4 py-3 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-sm text-slate-850 placeholder-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-[#4F3FF0]/10 min-h-[80px]"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold tracking-wider uppercase text-slate-700">Evaluation Decision</label>
+                <label className="text-[10px] font-bold text-slate-455 uppercase block">Decision *</label>
                 <select
-                  value={assessForm.decision}
-                  onChange={e => setAssessForm(prev => ({ ...prev, decision: e.target.value }))}
-                  className="w-full pl-4 pr-10 py-3.5 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-sm text-slate-800 font-semibold outline-none transition-all duration-200 focus:bg-white focus:ring-4 focus:ring-[#4F3FF0]/10 cursor-pointer"
+                  value={reviewForm.status}
+                  onChange={(e) => setReviewForm(prev => ({ ...prev, status: e.target.value }))}
+                  className="w-full pl-3 pr-8 py-2 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-xs text-slate-800 font-bold outline-none focus:bg-white cursor-pointer"
+                  required
                 >
-                  <option value="APPROVED">Approve Portfolio & Award Points</option>
-                  <option value="REJECTED">Request Portfolio Revision</option>
+                  <option value="APPROVED">APPROVE DELIVERABLE</option>
+                  <option value="REVISION_REQUESTED">REQUEST REVISION</option>
+                  <option value="REJECTED">REJECT SUBMISSION</option>
                 </select>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 font-sans">
-                <Button type="button" variant="outline" color="secondary" onClick={() => setShowAssessModal(false)} disabled={submitting}>
+              {reviewForm.status === 'APPROVED' && (
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-455 uppercase block">Points Awarded (Max: {selectedTask.pointsValue}) *</label>
+                  <input 
+                    type="number"
+                    min="0"
+                    max={selectedTask.pointsValue}
+                    value={reviewForm.points}
+                    onChange={(e) => setReviewForm(prev => ({ ...prev, points: Number(e.target.value) }))}
+                    className="w-full px-3.5 py-2 border border-slate-200 focus:border-[#4F3FF0] rounded-xl outline-none text-xs font-semibold"
+                    required
+                  />
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-455 uppercase block">Review Feedback comments</label>
+                <textarea
+                  rows={4}
+                  value={reviewForm.comment}
+                  onChange={(e) => setReviewForm(prev => ({ ...prev, comment: e.target.value }))}
+                  className="w-full px-3.5 py-2.5 border border-slate-200 focus:border-[#4F3FF0] rounded-xl outline-none text-xs font-semibold"
+                  placeholder="Type feedback comment here for student..."
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowReviewModal(false)}
+                  className="flex-1 px-4 py-2.5 border border-slate-200 hover:border-slate-350 text-slate-500 hover:text-slate-750 text-xs font-black rounded-xl transition-all cursor-pointer bg-white"
+                  disabled={reviewSubmitting}
+                >
                   Cancel
-                </Button>
-                <Button type="submit" variant="solid" color="primary" isLoading={submitting}>
-                  Save Evaluation
-                </Button>
+                </button>
+                <button
+                  type="submit"
+                  disabled={reviewSubmitting}
+                  className="flex-1 px-4 py-2.5 bg-[#4F3FF0] hover:bg-[#3D2ED0] text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-sm shadow-[#4F3FF0]/10 flex items-center justify-center gap-1.5"
+                >
+                  {reviewSubmitting ? (
+                    <Loader2 className="h-4.5 w-4.5 animate-spin" />
+                  ) : (
+                    'Save changes'
+                  )}
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
     </div>
   );
 };

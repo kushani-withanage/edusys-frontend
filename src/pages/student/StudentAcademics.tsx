@@ -1,21 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   BookOpen, 
   Download,
-  Lock,
-  Play
+  Play,
+  AlertTriangle
 } from 'lucide-react';
 import { examService } from '@/services/examService';
 import { materialService } from '@/services/materialService';
-import { useAuth } from '@/hooks/useAuth';
-import { courseAccessService } from '@/services/courseAccessService';
 import { api } from '@/utils/api';
 
 export const StudentAcademics: React.FC = () => {
-  const { user } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'courses' | 'exams' | 'materials'>('courses');
   const [myCourses, setMyCourses] = useState<any[]>([]);
+  const [confirmStartExam, setConfirmStartExam] = useState<any | null>(null);
 
   useEffect(() => {
     api.get<any[]>('/api/v1/courses/my-courses')
@@ -27,10 +26,7 @@ export const StudentAcademics: React.FC = () => {
   const [materials, setMaterials] = useState<any[]>([]);
   const [exams, setExams] = useState<any[]>([]);
 
-  // Quiz Modal States
-  const [showQuizModal, setShowQuizModal] = useState(false);
-  const [activeExam, setActiveExam] = useState<any | null>(null);
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
+
 
 
 
@@ -39,7 +35,7 @@ export const StudentAcademics: React.FC = () => {
       try {
         const [materialsData, examsData] = await Promise.all([
           materialService.getMaterials().catch(() => []),
-          examService.getExams().catch(() => [])
+          examService.getAvailableStudentExams().catch(() => [])
         ]);
 
         setMaterials(materialsData);
@@ -62,33 +58,7 @@ export const StudentAcademics: React.FC = () => {
     }
   };
 
-  // --- Quiz handlers ---
-  const handleStartQuiz = (exam: any) => {
-    setActiveExam(exam);
-    setSelectedAnswers({});
-    setShowQuizModal(true);
-  };
 
-  const handleOptionSelect = (qId: string, option: string) => {
-    setSelectedAnswers(prev => ({
-      ...prev,
-      [qId]: option
-    }));
-  };
-
-  const handleSubmitQuiz = () => {
-    if (!activeExam) return;
-    
-    let score = 0;
-    activeExam.questions.forEach((q: any) => {
-      if (selectedAnswers[q.id] === q.correct) {
-        score += q.marks;
-      }
-    });
-
-    alert(`Quiz completed! You scored ${score} marks.`);
-    setShowQuizModal(false);
-  };
 
   return (
     <div className="space-y-6">
@@ -193,51 +163,83 @@ export const StudentAcademics: React.FC = () => {
             <div className="overflow-x-auto border border-[#E9EDF5] rounded-2xl overflow-hidden font-sans">
               <table className="w-full border-collapse text-left">
                 <thead>
-                  <tr className="bg-[#F8FAFC]/50 border-b border-[#E9EDF5] text-slate-450 text-[10px] font-extrabold tracking-wider uppercase">
-                    <th className="px-6 py-4">EXAM MODULE</th>
-                    <th className="px-6 py-4">SCHEDULE DATETIME</th>
+                  <tr className="bg-[#F8FAFC]/50 border-b border-[#E9EDF5] text-slate-455 text-[9.5px] font-black tracking-wider uppercase">
+                    <th className="px-6 py-4">EXAM TITLE</th>
+                    <th className="px-6 py-4">ACTIVE WINDOW</th>
                     <th className="px-6 py-4">DURATION</th>
+                    <th className="px-6 py-4">ATTEMPTS</th>
                     <th className="px-6 py-4">STATUS</th>
                     <th className="px-6 py-4 text-right">ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E9EDF5] text-slate-850 text-xs font-semibold">
                   {exams.map(exam => {
-                    const isAvailable = exam.status === 'Available' || exam.status === 'ACTIVE';
+                    const status = exam.studentStatus || 'AVAILABLE';
                     return (
                       <tr key={exam.id} className="hover:bg-slate-50/20 transition-colors duration-150">
                         <td className="px-6 py-4.5 font-extrabold text-slate-800">
                           {exam.title}
                         </td>
-                        <td className="px-6 py-4.5 text-slate-450">
-                          {exam.datetime || 'Anytime'}
+                        <td className="px-6 py-4.5 text-slate-455">
+                          {new Date(exam.startTime).toLocaleDateString()} - {new Date(exam.endTime).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4.5">
-                          {exam.duration} Mins
+                          {exam.durationMinutes} Mins
+                        </td>
+                        <td className="px-6 py-4.5">
+                          {exam.attemptsTaken} / {exam.attemptsAllowed}
                         </td>
                         <td className="px-6 py-4.5">
                           <span className={`inline-flex px-2.5 py-0.5 border rounded-md text-[9px] font-bold tracking-wider uppercase leading-none ${
-                            isAvailable
-                              ? 'bg-amber-50 border-amber-250 text-amber-700'
-                              : 'bg-slate-50 border-slate-200 text-slate-450'
+                            status === 'IN_PROGRESS' ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                            status === 'COMPLETED' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+                            status === 'OVERDUE' ? 'bg-rose-50 border-rose-250 text-rose-700' :
+                            'bg-[#EBF7EE] border-emerald-100 text-emerald-800'
                           }`}>
-                            {exam.status}
+                            {status}
                           </span>
                         </td>
                         <td className="px-6 py-4.5 text-right">
-                          {isAvailable ? (
+                          {status === 'AVAILABLE' && (
                             <button
-                              onClick={() => handleStartQuiz(exam)}
-                              className="px-4 py-2 bg-[#4F3FF0] hover:bg-[#4335D6] text-white text-[10px] font-extrabold rounded-xl shadow-sm cursor-pointer inline-flex items-center gap-1.5"
+                              onClick={() => setConfirmStartExam(exam)}
+                              className="px-4 py-2 bg-[#4F3FF0] hover:bg-[#4335D6] text-white text-[10px] font-black rounded-xl shadow-sm cursor-pointer inline-flex items-center gap-1.5 transition-all"
                             >
-                              <Play className="h-3 w-3 shrink-0" />
-                              Start Test
+                              <Play className="h-3.5 w-3.5 shrink-0" /> Start Test
                             </button>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-3 py-2 text-slate-400 bg-slate-50 border border-[#E2E8F0] rounded-xl text-[10px] font-bold select-none cursor-not-allowed">
-                              <Lock className="h-3 w-3" />
-                              Locked
-                            </span>
+                          )}
+                          {status === 'IN_PROGRESS' && (
+                            <button
+                              onClick={() => navigate(`/student/exams/${exam.id}/take`)}
+                              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black rounded-xl shadow-sm cursor-pointer inline-flex items-center gap-1.5 transition-all"
+                            >
+                              <Play className="h-3.5 w-3.5 shrink-0" /> Resume Test
+                            </button>
+                          )}
+                          {status === 'COMPLETED' && (
+                            <button
+                              onClick={() => navigate(`/student/exams/attempts/${exam.activeAttemptId}/result`)}
+                              className="px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-[10px] font-black rounded-xl shadow-sm cursor-pointer inline-flex items-center gap-1.5 transition-all"
+                            >
+                              🎓 View Results
+                            </button>
+                          )}
+                          {status === 'OVERDUE' && (
+                            exam.activeAttemptId ? (
+                              <button
+                                onClick={() => navigate(`/student/exams/attempts/${exam.activeAttemptId}/result`)}
+                                className="px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-[10px] font-black rounded-xl shadow-sm cursor-pointer inline-flex items-center gap-1.5 transition-all"
+                              >
+                                🎓 View Results
+                              </button>
+                            ) : (
+                              <button
+                                disabled
+                                className="px-4 py-2 border border-slate-200 bg-slate-55 border-slate-200 text-slate-400 text-[10px] font-black rounded-xl shadow-sm inline-flex items-center gap-1.5 select-none cursor-not-allowed"
+                              >
+                                🔒 Overdue / Closed
+                              </button>
+                            )
                           )}
                         </td>
                       </tr>
@@ -296,58 +298,36 @@ export const StudentAcademics: React.FC = () => {
 
       </div>
 
-      {/* QUIZ ATTEMPT MODAL */}
-      {showQuizModal && activeExam && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-white rounded-3xl border border-[#E9EDF5] p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-black text-slate-800 font-heading">
-                {activeExam.title}
-              </h3>
-              <span className="text-[10px] font-bold text-[#4F3FF0] bg-indigo-50 px-2 py-0.5 rounded">
-                {activeExam.duration} MINS
-              </span>
-            </div>
 
-            <div className="space-y-6 py-2">
-              {activeExam.questions.map((q: any) => (
-                <div key={q.id} className="space-y-3">
-                  <p className="text-sm font-extrabold text-slate-800 leading-relaxed">{q.text}</p>
-                  
-                  <div className="grid grid-cols-1 gap-2">
-                    {q.options.map((opt: string) => {
-                      const isSelected = selectedAnswers[q.id] === opt;
-                      return (
-                        <button
-                          key={opt}
-                          onClick={() => handleOptionSelect(q.id, opt)}
-                          className={`w-full text-left px-4 py-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                            isSelected 
-                              ? 'bg-[#4F3FF0]/10 border-[#4F3FF0] text-[#4F3FF0]' 
-                              : 'bg-white border-[#E2E8F0] hover:bg-slate-50 text-slate-700'
-                          }`}
-                        >
-                          {opt}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
 
-            <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+      {confirmStartExam && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-[60] animate-in fade-in duration-200 pointer-events-auto">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full mx-4 shadow-xl border border-[#E9EDF5] space-y-4 text-left animate-in zoom-in-95 duration-200 font-sans">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-6 w-6 shrink-0 text-amber-500" />
+              <h4 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">Confirm Start Exam</h4>
+            </div>
+            <p className="text-xs font-semibold text-slate-600 leading-relaxed">
+              Are you sure you want to start the exam <span className="font-bold text-slate-850">"{confirmStartExam.title}"</span>? The timer of <span className="font-bold text-[#4F3FF0]">{confirmStartExam.durationMinutes} minutes</span> will begin immediately and cannot be paused.
+            </p>
+            <div className="flex gap-3 pt-2">
               <button
-                onClick={() => setShowQuizModal(false)}
-                className="px-5 py-2.5 border border-[#E2E8F0] text-slate-500 text-xs font-bold rounded-xl cursor-pointer"
+                type="button"
+                onClick={() => setConfirmStartExam(null)}
+                className="flex-1 px-4 py-2 border border-slate-200 hover:border-slate-350 text-slate-500 hover:text-slate-750 text-xs font-black rounded-xl transition-all cursor-pointer bg-white"
               >
                 Cancel
               </button>
               <button
-                onClick={handleSubmitQuiz}
-                className="px-5 py-2.5 bg-[#4F3FF0] text-white text-xs font-bold rounded-xl cursor-pointer"
+                type="button"
+                onClick={() => {
+                  const examId = confirmStartExam.id;
+                  setConfirmStartExam(null);
+                  navigate(`/student/exams/${examId}/take`);
+                }}
+                className="flex-1 px-4 py-2 bg-[#4F3FF0] hover:bg-[#4335D6] text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-sm shadow-[#4F3FF0]/10"
               >
-                Submit Exam
+                Start Now
               </button>
             </div>
           </div>

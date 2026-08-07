@@ -5,7 +5,6 @@ import {
   Trash2, 
   ArrowLeft, 
   Check, 
-  ChevronRight,
   BookOpen
 } from 'lucide-react';
 import { courseService } from '@/services/courseService';

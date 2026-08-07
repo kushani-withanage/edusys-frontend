@@ -12,7 +12,6 @@ import {
   ClipboardList,
   HelpCircle,
   Upload,
-  User,
   Loader2,
   X,
   AlertCircle,
@@ -24,6 +23,7 @@ import { courseService } from '@/services/courseService';
 import { toast } from '@/utils/toast';
 import { api } from '@/utils/api';
 import { submissionService } from '@/services/submissionService';
+import { SubmissionsTable } from '@/components/common/SubmissionsTable';
 
 export interface SyllabusItem {
   id: string;
@@ -2464,170 +2464,27 @@ export const StudentCourseDetail: React.FC = () => {
       {/* View All Submissions Modal */}
       {adminViewSubmissionsModalOpen && adminActiveItem && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 animate-in fade-in duration-200 pointer-events-auto overflow-y-auto">
-          <div className="bg-white rounded-3xl p-6 max-w-6xl w-full mx-4 shadow-xl border border-[#E9EDF5] space-y-5 text-left my-8 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-3xl p-6 max-w-6xl w-full mx-4 shadow-xl border border-[#E9EDF5] text-left my-8 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] relative">
+            <button 
+              onClick={() => setAdminViewSubmissionsModalOpen(false)}
+              className="absolute top-4 right-4 p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-full transition-colors cursor-pointer z-50"
+            >
+              <X className="h-4.5 w-4.5" />
+            </button>
             
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Submissions</h3>
-                <p className="text-[10px] text-slate-455 font-bold mt-0.5">{adminActiveItem.title}</p>
-              </div>
-              <button 
-                onClick={() => setAdminViewSubmissionsModalOpen(false)}
-                className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-full transition-colors cursor-pointer"
-              >
-                <X className="h-4.5 w-4.5" />
-              </button>
-            </div>
-
-            {/* Scrollable Submissions Table */}
-            <div className="overflow-x-auto flex-1">
-              <table className="w-full text-xs font-semibold text-slate-700 border-collapse min-w-[900px]">
-                <thead>
-                  <tr className="bg-slate-50 text-[10px] font-black text-slate-455 uppercase border-b border-slate-150">
-                    <th className="p-3 text-left w-12"><input type="checkbox" className="rounded text-[#4F3FF0]" /></th>
-                    <th className="p-3 text-left w-14">User picture</th>
-                    <th className="p-3 text-left">First name / Last name</th>
-                    <th className="p-3 text-left">Username</th>
-                    <th className="p-3 text-left">Email address</th>
-                    <th className="p-3 text-left">Status</th>
-                    <th className="p-3 text-left">Grade</th>
-                    <th className="p-3 text-left w-14">Edit</th>
-                    <th className="p-3 text-left">Last modified (submission)</th>
-                    <th className="p-3 text-left">File submissions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {adminStudents.map((student) => {
-                    const sub = adminSubmissions.find(s => s.studentId === student.userId);
-                    const isSubmitted = sub && sub.submittedFile && sub.submittedFile !== '[]';
-                    
-                    let timeRemainingInfo = { isEarly: true, text: '' };
-                    if (isSubmitted && sub.submitDate) {
-                      timeRemainingInfo = calculateTimeRemaining(
-                        sub.submitDate,
-                        adminActiveItemDetails?.dueDate || adminActiveItem.deadline,
-                        adminActiveItemDetails?.dueDate ? undefined : adminActiveItem.deadlineTime
-                      );
-                    } else {
-                      const deadlineText = adminActiveItemDetails?.dueDate || adminActiveItem.deadline;
-                      const deadlineTimeText = adminActiveItemDetails?.dueDate ? undefined : adminActiveItem.deadlineTime;
-                      const timeInfo = calculateTimeRemainingBeforeSubmit(deadlineText, deadlineTimeText);
-                      timeRemainingInfo = {
-                        isEarly: !timeInfo.isOverdue,
-                        text: timeInfo.text ? (timeInfo.isOverdue ? `Assignment is overdue by: ${timeInfo.text}` : `${timeInfo.text} remaining`) : ''
-                      };
-                    }
-
-                    return (
-                      <tr key={student.userId} className="hover:bg-slate-50/50">
-                        <td className="p-3"><input type="checkbox" className="rounded text-[#4F3FF0]" /></td>
-                        <td className="p-3">
-                          <div className="h-8 w-8 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center border border-slate-200">
-                            <User className="h-4 w-4" />
-                          </div>
-                        </td>
-                        <td className="p-3 font-extrabold text-[#4F3FF0] hover:underline cursor-pointer">{student.fullName}</td>
-                        <td className="p-3 text-slate-500 font-mono text-[10.5px]">{student.userId}</td>
-                        <td className="p-3 text-slate-600 font-mono text-[10.5px]">{student.email}</td>
-                        <td className="p-3">
-                          {isSubmitted ? (
-                            <div className="bg-[#EBF7EE] text-emerald-800 p-2 rounded-xl text-[10.5px]">
-                              <p className="font-extrabold">Submitted for grading</p>
-                              {timeRemainingInfo.text && (
-                                <p className={`text-[9.5px] font-bold ${!timeRemainingInfo.isEarly ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                  {timeRemainingInfo.text}
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="bg-rose-50/50 text-rose-900 border border-rose-100/50 p-2 rounded-xl text-[10.5px]">
-                              <p className="font-extrabold text-rose-800">No submission</p>
-                              {timeRemainingInfo.text && (
-                                <p className="text-[9.5px] font-black text-rose-600 mt-0.5">
-                                  {timeRemainingInfo.text}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                        <td className="p-3">
-                          <div className="flex flex-col gap-1.5 items-start">
-                            <button
-                              onClick={() => {
-                                setAdminActiveStudent(student);
-                                setGradeInput(sub?.marks !== undefined && sub?.marks !== null ? sub.marks.toString() : '');
-                                setFeedbackInput(sub?.feedback || '');
-                                setAdminGradeStudentModalOpen(true);
-                              }}
-                              className="px-3 py-1 bg-[#4F3FF0] hover:bg-[#3D2ED0] text-white text-[9.5px] font-black rounded-lg transition-colors cursor-pointer"
-                            >
-                              Grade
-                            </button>
-                            <span className="text-[10px] text-slate-400 font-bold">
-                              {sub?.marks !== undefined && sub?.marks !== null ? `${sub.marks.toFixed(2)}` : '-'} / 100.00
-                            </span>
-                          </div>
-                        </td>
-                        <td className="p-3 text-[#4F3FF0] hover:underline cursor-pointer text-[10.5px] font-black">Edit ▾</td>
-                        <td className="p-3 text-slate-500 font-mono text-[10px] whitespace-nowrap">
-                          {sub?.submitDate ? new Date(sub.submitDate).toLocaleString() : '-'}
-                        </td>
-                        <td className="p-3">
-                          {(() => {
-                            if (sub?.submittedFile && sub.submittedFile.startsWith('[')) {
-                              try {
-                                const files = JSON.parse(sub.submittedFile);
-                                return (
-                                  <div className="space-y-1 max-w-[200px]">
-                                    {files.map((file: any, fidx: number) => (
-                                      <div key={fidx} className="flex items-center gap-1.5 bg-slate-50 p-1.5 border border-slate-200/55 rounded-lg truncate text-[10px] font-extrabold">
-                                        <FileText className="h-3 w-3 text-rose-500 shrink-0" />
-                                        <a 
-                                          href={file.url.startsWith('data:') ? file.url : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}${file.url}`} 
-                                          target="_blank" 
-                                          rel="noopener noreferrer" 
-                                          className="text-[#4F3FF0] hover:underline truncate"
-                                          title={file.name}
-                                        >
-                                          {file.name}
-                                        </a>
-                                      </div>
-                                    ))}
-                                  </div>
-                                );
-                              } catch (e) {}
-                            }
-                            return sub?.submittedFile ? (
-                              <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 border border-slate-200/55 rounded-lg truncate text-[10px] font-extrabold max-w-[200px]">
-                                <FileText className="h-3 w-3 text-rose-550 shrink-0" />
-                                <a 
-                                  href={sub.submittedFile.startsWith('data:') ? sub.submittedFile : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}${sub.submittedFile}`} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer" 
-                                  className="text-[#4F3FF0] hover:underline truncate"
-                                >
-                                  {sub.submittedFile.substring(sub.submittedFile.indexOf('_') + 1)}
-                                </a>
-                              </div>
-                            ) : '-';
-                          })()}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex justify-end pt-3 border-t border-slate-100">
-              <button
-                onClick={() => setAdminViewSubmissionsModalOpen(false)}
-                className="px-5 py-2.5 border border-slate-200 hover:border-slate-350 text-slate-500 hover:text-slate-750 text-xs font-black rounded-xl transition-all cursor-pointer bg-white"
-              >
-                Close
-              </button>
-            </div>
-
+            <SubmissionsTable
+              title="Submissions"
+              subtitle={adminActiveItem.title}
+              students={adminStudents}
+              submissions={adminSubmissions}
+              isCareerScale={false}
+              onReview={(student, sub) => {
+                setAdminActiveStudent(student);
+                setGradeInput(sub?.marks !== undefined && sub?.marks !== null ? sub.marks.toString() : '');
+                setFeedbackInput(sub?.feedback || '');
+                setAdminGradeStudentModalOpen(true);
+              }}
+            />
           </div>
         </div>
       )}

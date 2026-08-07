@@ -2,260 +2,239 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Loader2, 
   AlertCircle, 
-  Plus,
-  Trash2,
-  Sparkles,
-  Database,
-  CheckCircle,
-  AlertTriangle,
-  Award
+  Plus, 
+  Trash2, 
+  Award,
+  BookOpen,
+  FileText,
+  Image as ImageIcon,
+  Link as LinkIcon,
+  HelpCircle,
+  ToggleLeft,
+  ToggleRight,
+  Layers
 } from 'lucide-react';
 import Button from '@/components/common/Button';
 import TextField from '@/components/common/TextField';
-import { careerTaskService, type CareerTaskData } from '@/services/careerTaskService';
+import { careerTaskService, type CareerTaskData, type CareerLevelBatchAccessData } from '@/services/careerTaskService';
+import { pointsLevelService, type CareerLevelData } from '@/services/pointsLevelService';
+import { batchService } from '@/services/batchService';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-
-interface Task {
-  taskId: string;
-  taskCode: string;
-  title: string;
-  description: string;
-  dueDate: string;
-  rubricCriteria: string;
-  pointValue: number;
-  batchName: string;
-  targetLevel: string;
-  isReact?: boolean;
-  totalSubmissions?: number;
-  approvedSubmissions?: number;
-  pendingSubmissions?: number;
-}
+import { toast } from '@/utils/toast';
 
 export const CareerTasks: React.FC = () => {
   // --- States ---
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<CareerTaskData[]>([]);
+  const [levels, setLevels] = useState<CareerLevelData[]>([]);
+  const [batches, setBatches] = useState<any[]>([]);
+  const [batchAccess, setBatchAccess] = useState<CareerLevelBatchAccessData[]>([]);
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // --- Filter states ---
-  const [batchFilter, setBatchFilter] = useState('All');
+  const [selectedLevelFilter, setSelectedLevelFilter] = useState('All');
 
   // --- Modals State ---
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // --- Confirmation Modal State ---
+  const [confirmModal, setConfirmModal] = useState<{
+    show: boolean;
+    taskId: string;
+    taskTitle: string;
+  }>({
+    show: false,
+    taskId: '',
+    taskTitle: ''
+  });
+
   // --- Form States ---
   const [taskForm, setTaskForm] = useState({
     title: '',
     description: '',
-    batchName: 'ICD110',
-    targetLevel: 'Level L2',
-    pointValue: '50',
-    rubricCriteria: '100% Code Weight',
-    isReact: false,
-    dueDate: new Date().toISOString().split('T')[0]
+    levelId: '',
+    pointsValue: '50',
+    submissionType: 'LINK' // LINK, IMAGE, PDF, FILE
   });
 
-  // --- Mock Fallbacks (Sandbox visualization mode) ---
-  const defaultTasks = useMemo<Task[]>(() => [
-    {
-      taskId: 't-1',
-      taskCode: 'T1',
-      title: 'Complete Git Workflow & Pull Requests',
-      description: 'Submit repository demonstrating branches, conflict merge resolution, and code reviews.',
-      dueDate: '2026-08-10',
-      rubricCriteria: '100% Code Weight',
-      pointValue: 50,
-      batchName: 'ICD110',
-      targetLevel: 'Level L2',
-      isReact: false,
-      totalSubmissions: 25,
-      approvedSubmissions: 20,
-      pendingSubmissions: 5
-    },
-    {
-      taskId: 't-2',
-      taskCode: 'T2',
-      title: 'Develop Full Stack React CRUD App',
-      description: 'Deploy a React frontend client talking to a REST server with relational schemas.',
-      dueDate: '2026-08-15',
-      rubricCriteria: '80% Code Weight',
-      pointValue: 150,
-      batchName: 'FSW-2026-B',
-      targetLevel: 'Level L3',
-      isReact: true,
-      totalSubmissions: 32,
-      approvedSubmissions: 28,
-      pendingSubmissions: 4
-    }
-  ], []);
-
   // --- Fetch API Data ---
-  const fetchTasksData = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const data = await careerTaskService.getTasks();
+      const [levelsData, tasksData, batchesData, accessData] = await Promise.all([
+        pointsLevelService.getLevels(),
+        careerTaskService.getTasks(),
+        batchService.getBatches(),
+        careerTaskService.getBatchAccess()
+      ]);
 
-      // Map raw backend CareerTaskDTOs to our Task representation
-      const mapped: Task[] = data.map((item, idx) => {
-        // Find if we have matches or default fallback details
-        const fallback = defaultTasks[idx % defaultTasks.length];
-        return {
-          taskId: item.taskId,
-          taskCode: `T${idx + 1}`,
-          title: item.title,
-          description: item.description,
-          dueDate: item.dueDate,
-          rubricCriteria: item.rubricCriteria || fallback.rubricCriteria,
-          pointValue: item.pointValue || fallback.pointValue,
-          batchName: fallback.batchName,
-          targetLevel: fallback.targetLevel,
-          isReact: item.title?.toLowerCase().includes('react') || fallback.isReact,
-          totalSubmissions: fallback.totalSubmissions,
-          approvedSubmissions: fallback.approvedSubmissions,
-          pendingSubmissions: fallback.pendingSubmissions
-        };
-      });
+      setLevels(levelsData || []);
+      setTasks(tasksData || []);
+      setBatches(batchesData || []);
+      setBatchAccess(accessData || []);
 
-      setTasks(mapped.length > 0 ? mapped : defaultTasks);
+      // Pre-select first level in create form if available
+      if (levelsData && levelsData.length > 0) {
+        setTaskForm(prev => ({
+          ...prev,
+          levelId: levelsData[0].id || ''
+        }));
+      }
     } catch (err: any) {
       console.error(err);
-      setError('Could not connect to backend server. Running in simulated sandbox mode.');
-      setTasks(defaultTasks);
+      setError('Could not connect to backend server. Ensure the service is active.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchTasksData();
-  }, [defaultTasks]);
+    fetchData();
+  }, []);
 
   // --- Handlers ---
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!taskForm.title.trim() || !taskForm.description.trim()) return;
+    if (!taskForm.title.trim() || !taskForm.description.trim() || !taskForm.levelId) {
+      alert('Please fill out all required fields.');
+      return;
+    }
 
     try {
       setSubmitting(true);
       const payload: CareerTaskData = {
         title: taskForm.title,
         description: taskForm.description,
-        dueDate: taskForm.dueDate,
-        rubricCriteria: taskForm.rubricCriteria,
-        pointValue: Number(taskForm.pointValue) || 50
+        levelId: taskForm.levelId,
+        pointsValue: Number(taskForm.pointsValue) || 50,
+        submissionType: taskForm.submissionType,
+        isActive: true
       };
 
-      const created = await careerTaskService.createTask(payload);
+      await careerTaskService.createTask(payload);
       
-      const newTask: Task = {
-        taskId: created.taskId,
-        taskCode: `T${tasks.length + 1}`,
-        title: created.title,
-        description: created.description,
-        dueDate: created.dueDate,
-        rubricCriteria: created.rubricCriteria,
-        pointValue: created.pointValue,
-        batchName: taskForm.batchName,
-        targetLevel: taskForm.targetLevel,
-        isReact: taskForm.isReact,
-        totalSubmissions: 0,
-        approvedSubmissions: 0,
-        pendingSubmissions: 0
-      };
-
-      setTasks(prev => [...prev, newTask]);
       setShowCreateModal(false);
-      setTaskForm({
+      setTaskForm(prev => ({
+        ...prev,
         title: '',
         description: '',
-        batchName: 'ICD110',
-        targetLevel: 'Level L2',
-        pointValue: '50',
-        rubricCriteria: '100% Code Weight',
-        isReact: false,
-        dueDate: new Date().toISOString().split('T')[0]
-      });
-      alert('Career Task created successfully!');
+        pointsValue: '50',
+        submissionType: 'LINK'
+      }));
+      toast.success('Career Task created successfully!');
+      fetchData();
     } catch (err: any) {
       console.error(err);
-      // Fallback
-      const sandboxCreated: Task = {
-        taskId: 't-' + (tasks.length + 1),
-        taskCode: `T${tasks.length + 1}`,
-        title: taskForm.title,
-        description: taskForm.description,
-        dueDate: taskForm.dueDate,
-        rubricCriteria: taskForm.rubricCriteria,
-        pointValue: Number(taskForm.pointValue) || 50,
-        batchName: taskForm.batchName,
-        targetLevel: taskForm.targetLevel,
-        isReact: taskForm.isReact,
-        totalSubmissions: 0,
-        approvedSubmissions: 0,
-        pendingSubmissions: 0
-      };
-      setTasks(prev => [...prev, sandboxCreated]);
-      setShowCreateModal(false);
-      setTaskForm({
-        title: '',
-        description: '',
-        batchName: 'ICD110',
-        targetLevel: 'Level L2',
-        pointValue: '50',
-        rubricCriteria: '100% Code Weight',
-        isReact: false,
-        dueDate: new Date().toISOString().split('T')[0]
-      });
-      alert('Simulation: Career Task created locally.');
+      alert(err.message || 'Failed to create task.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDeleteTask = async (id: string, code: string) => {
-    const confirm = window.confirm(`Are you sure you want to delete career task "${code}"?`);
-    if (!confirm) return;
-
+  const handleToggleActive = async (task: CareerTaskData) => {
+    if (!task.id) return;
     try {
-      await careerTaskService.deleteTask(id);
-      setTasks(prev => prev.filter(t => t.taskId !== id));
-      alert('Career Task deleted successfully.');
+      const updated = {
+        ...task,
+        isActive: !task.isActive
+      };
+      await careerTaskService.updateTask(task.id, updated);
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, isActive: updated.isActive } : t));
+      toast.success(`Task "${task.title}" status updated.`);
     } catch (err: any) {
       console.error(err);
-      setTasks(prev => prev.filter(t => t.taskId !== id));
-      alert('Simulation: Career Task deleted.');
+      alert(err.message || 'Failed to update task status.');
     }
+  };
+
+  const triggerDeleteConfirm = (id: string, title: string) => {
+    setConfirmModal({
+      show: true,
+      taskId: id,
+      taskTitle: title
+    });
+  };
+
+  const executeDeleteTask = async () => {
+    const { taskId } = confirmModal;
+    if (!taskId) return;
+
+    try {
+      await careerTaskService.deleteTask(taskId);
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+      setConfirmModal({ show: false, taskId: '', taskTitle: '' });
+      toast.success('Career Task deleted successfully.');
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Failed to delete task.');
+    }
+  };
+
+  // Toggle Batch Access Handler
+  const handleToggleAccess = async (levelId: string, batchId: string) => {
+    try {
+      // Optimistic UI update
+      setBatchAccess(prev => {
+        const copy = [...prev];
+        const index = copy.findIndex(a => a.level.id === levelId && a.batch.batchId === batchId);
+        if (index > -1) {
+          copy[index] = { ...copy[index], isOpen: !copy[index].isOpen };
+        } else {
+          // Add temporary mapping
+          copy.push({
+            id: 'temp',
+            level: { id: levelId, levelNumber: 0, title: '' },
+            batch: { batchId, batchName: '' },
+            isOpen: true,
+            openedAt: new Date().toISOString()
+          });
+        }
+        return copy;
+      });
+
+      await careerTaskService.toggleBatchAccess(levelId, batchId);
+      toast.success('Batch access setting updated.');
+      
+      // Fetch latest access mappings from server
+      const updatedAccess = await careerTaskService.getBatchAccess();
+      setBatchAccess(updatedAccess || []);
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Failed to toggle batch level access.');
+      // Revert mapping
+      fetchData();
+    }
+  };
+
+  // Check if access is open
+  const isLevelOpenForBatch = (levelId: string, batchId: string): boolean => {
+    const access = batchAccess.find(a => a.level.id === levelId && a.batch.batchId === batchId);
+    return access ? access.isOpen : false;
   };
 
   // --- Filtered tasks ---
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
-      return batchFilter === 'All' || t.batchName === batchFilter;
+      return selectedLevelFilter === 'All' || t.levelId === selectedLevelFilter;
     });
-  }, [tasks, batchFilter]);
+  }, [tasks, selectedLevelFilter]);
 
-  // --- Dynamic Stats calculation ---
-  const stats = useMemo(() => {
-    const totalTasks = tasks.length;
-    const reactTasks = tasks.filter(t => t.isReact).length;
-    
-    // Aggregate total submissions
-    const totalSubmissions = tasks.reduce((sum, t) => sum + (t.totalSubmissions || 0), 0) || 115;
-    const pendingReviews = tasks.reduce((sum, t) => sum + (t.pendingSubmissions || 0), 0) || 16;
-    
-    return {
-      totalTasks,
-      reactTasks,
-      totalSubmissions,
-      pendingReviews
-    };
-  }, [tasks]);
+  // --- Icon mapping for submission type ---
+  const getSubmissionIcon = (type: string) => {
+    switch (type.toUpperCase()) {
+      case 'LINK': return <LinkIcon className="h-4 w-4 text-sky-500" />;
+      case 'IMAGE': return <ImageIcon className="h-4 w-4 text-emerald-500" />;
+      case 'PDF': return <FileText className="h-4 w-4 text-rose-500" />;
+      default: return <BookOpen className="h-4 w-4 text-slate-500" />;
+    }
+  };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
+    <div className="space-y-6 text-left max-w-5xl mx-auto font-sans pb-10 select-none">
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-5 w-5 text-rose-500 mt-0.5 shrink-0" />
@@ -266,37 +245,29 @@ export const CareerTasks: React.FC = () => {
       {/* Header Panel */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#E9EDF5] pb-6">
         <div>
-          <h1 className="text-[18px] md:text-xl lg:text-2xl font-semibold text-slate-800 tracking-tight flex items-center gap-2 font-heading">
-            <Award className="h-7 w-7 text-[#4F3FF0]" />
-            Career Task Creator
+          <h1 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+            <Award className="h-6 w-6 text-[#4F3FF0]" />
+            Career Tasks Configuration
           </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Design academic-grade tasks, review submission summaries, and track batch assignments.
+          <p className="text-slate-500 text-xs mt-1 font-semibold">
+            Define practical deliverables students must submit to meet career level progression criteria.
           </p>
-        </div>
-        <div>
-          <button 
-            type="button"
-            disabled 
-            className="px-6 py-2.5 border border-[#E2E8F0] bg-[#F8FAFC] text-slate-400 text-xs font-bold rounded-xl cursor-not-allowed select-none font-sans"
-          >
-            Save Configurations
-          </button>
         </div>
       </div>
 
-      {/* Filter by batch bar */}
-      <div className="bg-white border border-[#E2E8F0] rounded-2xl p-4 shadow-sm flex items-center justify-between gap-4 select-none">
+      {/* Filter by level bar */}
+      <div className="bg-white border border-[#E9EDF5] rounded-2xl p-4 shadow-sm flex items-center justify-between gap-4 select-none">
         <div className="flex items-center gap-2 font-bold text-slate-700 text-xs">
-          <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider">FILTER BY BATCH:</span>
+          <span className="text-[10px] font-bold text-slate-455 uppercase tracking-wider">Filter By Level:</span>
           <select
-            value={batchFilter}
-            onChange={(e) => setBatchFilter(e.target.value)}
-            className="bg-white border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-[#4F3FF0] cursor-pointer"
+            value={selectedLevelFilter}
+            onChange={(e) => setSelectedLevelFilter(e.target.value)}
+            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-[#4F3FF0] cursor-pointer"
           >
-            <option value="All">All Batches</option>
-            <option value="ICD110">ICD110</option>
-            <option value="FSW-2026-B">FSW-2026-B</option>
+            <option value="All">All Levels</option>
+            {levels.map(l => (
+              <option key={l.id} value={l.id}>L{l.levelNumber} - {l.title}</option>
+            ))}
           </select>
         </div>
         <div>
@@ -311,155 +282,147 @@ export const CareerTasks: React.FC = () => {
         </div>
       </div>
 
-      {/* Metric Tiles Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 select-none">
-        {/* Card 1: TOTAL TASKS */}
-        <div className="bg-white border border-[#E9EDF5] p-5 rounded-2xl shadow-sm flex items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <span className="text-[10px] font-extrabold text-slate-400 tracking-wider uppercase block">TOTAL TASKS</span>
-            <span className="text-2xl font-black text-slate-800 leading-none block font-heading">{stats.totalTasks}</span>
-            <span className="text-[10px] font-semibold text-slate-400 block">Active in all courses</span>
-          </div>
-          <div className="p-3 bg-indigo-50 text-[#4F3FF0] rounded-xl shrink-0">
-            <Database className="h-5 w-5" />
-          </div>
-        </div>
-
-        {/* Card 2: REACT-SPECIFIC TASKS */}
-        <div className="bg-white border border-[#E9EDF5] p-5 rounded-2xl shadow-sm flex items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <span className="text-[10px] font-extrabold text-slate-400 tracking-wider uppercase block">REACT-SPECIFIC TASKS</span>
-            <span className="text-2xl font-black text-slate-800 leading-none block font-heading">{stats.reactTasks}</span>
-            <span className="text-[10px] font-semibold text-slate-400 block">78 submissions completed</span>
-          </div>
-          <div className="p-3 bg-amber-50 text-amber-500 rounded-xl shrink-0">
-            <Sparkles className="h-5 w-5" />
-          </div>
-        </div>
-
-        {/* Card 3: TOTAL SUBMISSIONS */}
-        <div className="bg-white border border-[#E9EDF5] p-5 rounded-2xl shadow-sm flex items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <span className="text-[10px] font-extrabold text-slate-400 tracking-wider uppercase block">TOTAL SUBMISSIONS</span>
-            <span className="text-2xl font-black text-slate-800 leading-none block font-heading">{stats.totalSubmissions}</span>
-            <span className="text-[10px] font-semibold text-slate-400 block">Reviewed & approved</span>
-          </div>
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl shrink-0">
-            <CheckCircle className="h-5 w-5" />
-          </div>
-        </div>
-
-        {/* Card 4: PENDING REVIEWS */}
-        <div className="bg-white border border-[#E9EDF5] p-5 rounded-2xl shadow-sm flex items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <span className="text-[10px] font-extrabold text-slate-400 tracking-wider uppercase block">PENDING REVIEWS</span>
-            <span className="text-2xl font-black text-rose-600 leading-none block font-heading">{stats.pendingReviews}</span>
-            <span className="text-[10px] font-semibold text-rose-500 block leading-tight">Awaiting academic coordinator assessment</span>
-          </div>
-          <div className="p-3 bg-rose-50 text-rose-600 rounded-xl shrink-0">
-            <AlertTriangle className="h-5 w-5" />
-          </div>
-        </div>
-      </div>
-
       {/* Main Table section */}
-      <div className="bg-white border border-[#E9EDF5] rounded-2xl p-6 shadow-sm space-y-4">
+      <div className="bg-white border border-[#E9EDF5] rounded-3xl p-6 shadow-sm space-y-4">
         <div>
-          <h3 className="font-extrabold text-slate-800 text-sm font-heading">Active Career Tasks & Rubrics</h3>
-          <p className="text-slate-450 text-[11px] font-semibold mt-1">Review defined software engineering projects, point weighting metrics, and student submissions status.</p>
+          <h3 className="font-extrabold text-slate-800 text-sm font-heading">Defined Career Tasks</h3>
+          <p className="text-slate-450 text-[10px] font-semibold mt-0.5">List of actionable tasks and expectations per career stage.</p>
         </div>
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <Loader2 className="h-8 w-8 text-[#4F3FF0] animate-spin" />
-            <p className="text-slate-500 font-medium text-sm">Loading Career Tasks...</p>
+            <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">Loading Tasks...</p>
           </div>
         ) : filteredTasks.length === 0 ? (
-          <div className="text-center py-20">
-            <h3 className="font-bold text-slate-655">No career tasks match the filters</h3>
+          <div className="text-center py-20 bg-slate-50 rounded-2xl border border-dashed border-slate-205">
+            <HelpCircle className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+            <h3 className="font-bold text-slate-500 text-xs uppercase tracking-wider">No career tasks defined</h3>
           </div>
         ) : (
-          <div className="overflow-x-auto border border-[#E9EDF5] rounded-2xl overflow-hidden">
+          <div className="overflow-x-auto border border-[#E9EDF5] rounded-2xl">
             <table className="w-full border-collapse text-left">
               <thead>
-                <tr className="bg-[#F8FAFC]/50 border-b border-[#E9EDF5] text-slate-450 text-[10px] font-extrabold tracking-wider uppercase">
-                  <th className="px-6 py-4">TASK CODE</th>
-                  <th className="px-6 py-4 w-1/3">TASK DETAILS</th>
-                  <th className="px-6 py-4">ASSIGNED BATCH</th>
-                  <th className="px-6 py-4">TARGET LEVEL</th>
-                  <th className="px-6 py-4">REWARD POINTS</th>
-                  <th className="px-6 py-4">SUBMISSIONS SUMMARIES</th>
-                  <th className="px-6 py-4">RUBRICS WEIGHT</th>
-                  <th className="px-6 py-4 text-center">ACTION</th>
+                <tr className="bg-[#F8FAFC]/50 border-b border-[#E9EDF5] text-slate-455 text-[10px] font-bold tracking-wider uppercase">
+                  <th className="px-6 py-4 w-1/2">Task Details</th>
+                  <th className="px-6 py-4">Target Level</th>
+                  <th className="px-6 py-4">Points</th>
+                  <th className="px-6 py-4">Type</th>
+                  <th className="px-6 py-4 text-center">Status</th>
+                  <th className="px-6 py-4 text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E9EDF5] text-slate-800 text-xs font-semibold">
                 {filteredTasks.map(t => (
-                  <tr key={t.taskId} className="hover:bg-slate-50/20 transition-colors duration-150 align-middle">
-                    
-                    {/* Code */}
-                    <td className="px-6 py-5 font-black text-slate-800">
-                      {t.taskCode}
-                    </td>
-
-                    {/* Details */}
-                    <td className="px-6 py-5 space-y-1.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-extrabold text-slate-800 text-xs leading-none">{t.title}</span>
-                        {t.isReact && (
-                          <span className="inline-flex items-center px-2 py-0.5 border border-blue-200 bg-blue-50 text-blue-600 text-[9px] font-extrabold rounded-md uppercase tracking-wide leading-none select-none">
-                            REACT TASK
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-slate-400 font-semibold leading-relaxed max-w-sm">
+                  <tr key={t.id} className="hover:bg-slate-50/20 transition-colors duration-150 align-middle">
+                    <td className="px-6 py-4 space-y-1">
+                      <span className="font-extrabold text-slate-800 text-xs block">{t.title}</span>
+                      <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
                         {t.description}
                       </p>
                     </td>
-
-                    {/* Batch */}
-                    <td className="px-6 py-5">
-                      <span className="inline-flex items-center px-3 py-1 text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-100 rounded-full select-none uppercase">
-                        {t.batchName}
-                      </span>
-                    </td>
-
-                    {/* Target Level */}
-                    <td className="px-6 py-5">
+                    <td className="px-6 py-4">
                       <span className="inline-flex items-center px-3 py-1 text-[10px] font-bold text-[#4F3FF0] bg-indigo-50/50 border border-indigo-100 rounded-full select-none">
-                        {t.targetLevel}
+                        L{t.levelNumber} - {t.levelTitle}
                       </span>
                     </td>
-
-                    {/* Reward Points */}
-                    <td className="px-6 py-5 text-amber-600 font-black text-xs">
-                      +{t.pointValue} PTS
+                    <td className="px-6 py-4 text-amber-600 font-black text-xs">
+                      +{t.pointsValue} PTS
                     </td>
-
-                    {/* Submissions Summaries */}
-                    <td className="px-6 py-5 leading-relaxed text-[10px]">
-                      <div className="font-extrabold text-slate-700">{t.totalSubmissions || 0} Total Submissions</div>
-                      <div className="font-semibold text-slate-450 mt-0.5">
-                        <span className="text-emerald-600">{t.approvedSubmissions || 0} approved</span> • {t.pendingSubmissions || 0} pending
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-1.5 font-bold uppercase text-[9px] text-slate-600 select-none">
+                        {getSubmissionIcon(t.submissionType)}
+                        <span>{t.submissionType}</span>
                       </div>
                     </td>
-
-                    {/* Rubrics Weight */}
-                    <td className="px-6 py-5 font-black text-slate-800 text-xs">
-                      {t.rubricCriteria}
+                    <td className="px-6 py-4 text-center">
+                      <button
+                        onClick={() => handleToggleActive(t)}
+                        className="p-1 rounded-lg transition-all cursor-pointer text-slate-500 hover:text-slate-800"
+                        title={t.isActive ? "Deactivate Task" : "Activate Task"}
+                      >
+                        {t.isActive ? (
+                          <ToggleRight className="h-6 w-6 text-[#4F3FF0]" />
+                        ) : (
+                          <ToggleLeft className="h-6 w-6 text-slate-450" />
+                        )}
+                      </button>
                     </td>
-
-                    {/* Trash Action */}
-                    <td className="px-6 py-5 text-center select-none">
+                    <td className="px-6 py-4 text-center select-none">
                       <button 
-                        onClick={() => handleDeleteTask(t.taskId, t.taskCode)}
+                        onClick={() => triggerDeleteConfirm(t.id!, t.title)}
                         className="p-2 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition-colors cursor-pointer"
-                        title="Delete Career Task"
+                        title="Delete Task"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
+      {/* Level Batch Access Control Matrix Panel */}
+      <div className="bg-white border border-[#E9EDF5] rounded-3xl p-6 shadow-sm space-y-4">
+        <div>
+          <h3 className="font-extrabold text-slate-800 text-sm font-heading flex items-center gap-1.5">
+            <Layers className="h-4.5 w-4.5 text-[#4F3FF0]" /> Open Level for Batch
+          </h3>
+          <p className="text-slate-450 text-[10px] font-semibold mt-0.5">
+            Toggle level visibility and tasks access for specific class batches.
+          </p>
+        </div>
+
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-10">
+            <Loader2 className="h-6 w-6 text-[#4F3FF0] animate-spin" />
+          </div>
+        ) : levels.length === 0 || batches.length === 0 ? (
+          <div className="text-center py-10 text-slate-400 font-bold">
+            Define both levels and batches to configure access.
+          </div>
+        ) : (
+          <div className="overflow-x-auto border border-[#E9EDF5] rounded-2xl">
+            <table className="w-full border-collapse text-left text-xs font-semibold text-slate-700">
+              <thead>
+                <tr className="bg-[#F8FAFC]/50 border-b border-[#E9EDF5] text-slate-455 text-[10px] font-bold tracking-wider uppercase select-none">
+                  <th className="px-6 py-4 w-1/4">Batch / Intake</th>
+                  {levels.map(lvl => (
+                    <th key={lvl.id} className="px-6 py-4 text-center">L{lvl.levelNumber}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E9EDF5]">
+                {batches.map(batch => (
+                  <tr key={batch.batchId} className="hover:bg-slate-50/20">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-[#4F3FF0]" />
+                        <span className="font-extrabold text-slate-850">{batch.batchName}</span>
+                      </div>
+                    </td>
+                    {levels.map(lvl => {
+                      const isOpen = isLevelOpenForBatch(lvl.id!, batch.batchId);
+                      return (
+                        <td key={lvl.id} className="px-6 py-4 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleAccess(lvl.id!, batch.batchId)}
+                            className="p-1 rounded-lg transition-all cursor-pointer inline-flex items-center justify-center"
+                            title={`Toggle L${lvl.levelNumber} for ${batch.batchName}`}
+                          >
+                            {isOpen ? (
+                              <ToggleRight className="h-6 w-6 text-emerald-500" />
+                            ) : (
+                              <ToggleLeft className="h-6 w-6 text-slate-450" />
+                            )}
+                          </button>
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
@@ -471,90 +434,72 @@ export const CareerTasks: React.FC = () => {
       {/* --- CREATE TASK MODAL --- */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="bg-white border border-[#E9EDF5] rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
-            <h3 className="text-lg font-extrabold text-slate-805 mb-4 font-heading flex items-center gap-2 select-none">
+          <div className="bg-white border border-[#E9EDF5] rounded-3xl p-6 w-full max-w-lg shadow-2xl relative text-left">
+            <h3 className="text-base font-black text-slate-800 mb-4 flex items-center gap-2 select-none">
               <Award className="h-5 w-5 text-[#4F3FF0]" />
               Create New Career Task
             </h3>
             
             <form onSubmit={handleCreateSubmit} className="space-y-4 font-sans">
-              
               <TextField
                 label="Task Title *"
                 value={taskForm.title}
                 onChange={e => setTaskForm(prev => ({ ...prev, title: e.target.value }))}
-                placeholder="e.g. Develop Full Stack React CRUD App"
+                placeholder="e.g. Deploy React Application"
                 required
               />
 
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold tracking-wider uppercase text-slate-700">Task Description *</label>
+              <div className="space-y-1">
+                <label className="block text-[10px] font-extrabold tracking-wider uppercase text-slate-500 select-none">Description *</label>
                 <textarea
                   value={taskForm.description}
                   onChange={e => setTaskForm(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="e.g. Deploy a React frontend client talking to a REST server..."
-                  className="w-full pl-4 pr-4 py-3 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-sm text-slate-850 placeholder-slate-400 outline-none focus:bg-white focus:ring-4 focus:ring-[#4F3FF0]/10 min-h-[70px]"
+                  placeholder="Summarize the core task objective and guidelines..."
+                  className="w-full pl-4 pr-4 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-xs text-slate-800 placeholder-slate-450 outline-none focus:bg-white focus:ring-4 focus:ring-[#4F3FF0]/10 min-h-[70px] transition-all"
                   required
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold tracking-wider uppercase text-slate-700">Assigned Batch</label>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-extrabold tracking-wider uppercase text-slate-500 select-none">Target Level *</label>
                   <select
-                    value={taskForm.batchName}
-                    onChange={e => setTaskForm(prev => ({ ...prev, batchName: e.target.value }))}
-                    className="w-full pl-4 pr-10 py-3.5 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-sm text-slate-800 font-semibold outline-none transition-all duration-200 focus:bg-white focus:ring-4 focus:ring-[#4F3FF0]/10 cursor-pointer"
+                    value={taskForm.levelId}
+                    onChange={e => setTaskForm(prev => ({ ...prev, levelId: e.target.value }))}
+                    className="w-full pl-3 pr-8 py-2 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-xs text-slate-800 font-bold outline-none focus:bg-white cursor-pointer"
+                    required
                   >
-                    <option value="ICD110">ICD110</option>
-                    <option value="FSW-2026-B">FSW-2026-B</option>
+                    <option value="" disabled>Select Target Level</option>
+                    {levels.map(l => (
+                      <option key={l.id} value={l.id}>L{l.levelNumber} - {l.title}</option>
+                    ))}
                   </select>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold tracking-wider uppercase text-slate-700">Target Level</label>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-extrabold tracking-wider uppercase text-slate-500 select-none">Submission Type *</label>
                   <select
-                    value={taskForm.targetLevel}
-                    onChange={e => setTaskForm(prev => ({ ...prev, targetLevel: e.target.value }))}
-                    className="w-full pl-4 pr-10 py-3.5 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-sm text-slate-800 font-semibold outline-none transition-all duration-200 focus:bg-white focus:ring-4 focus:ring-[#4F3FF0]/10 cursor-pointer"
+                    value={taskForm.submissionType}
+                    onChange={e => setTaskForm(prev => ({ ...prev, submissionType: e.target.value }))}
+                    className="w-full pl-3 pr-8 py-2 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-xs text-slate-800 font-bold outline-none focus:bg-white cursor-pointer"
+                    required
                   >
-                    <option value="Level L1">Level L1</option>
-                    <option value="Level L2">Level L2</option>
-                    <option value="Level L3">Level L3</option>
-                    <option value="Level L4">Level L4</option>
+                    <option value="LINK">LINK (URL)</option>
+                    <option value="IMAGE">IMAGE (PNG/JPG)</option>
+                    <option value="PDF">PDF DOCUMENT</option>
+                    <option value="FILE">ZIP/SOURCE FILE</option>
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="w-1/2">
                 <TextField
                   label="Reward Points *"
                   type="number"
-                  value={taskForm.pointValue}
-                  onChange={e => setTaskForm(prev => ({ ...prev, pointValue: e.target.value }))}
+                  value={taskForm.pointsValue}
+                  onChange={e => setTaskForm(prev => ({ ...prev, pointsValue: e.target.value }))}
                   required
                 />
-
-                <TextField
-                  label="Rubrics Criteria *"
-                  value={taskForm.rubricCriteria}
-                  onChange={e => setTaskForm(prev => ({ ...prev, rubricCriteria: e.target.value }))}
-                  placeholder="e.g. 100% Code Weight"
-                  required
-                />
-              </div>
-
-              <div className="flex items-center gap-2 select-none pt-1">
-                <input
-                  type="checkbox"
-                  id="isReactTaskCheck"
-                  checked={taskForm.isReact}
-                  onChange={e => setTaskForm(prev => ({ ...prev, isReact: e.target.checked }))}
-                  className="h-4 w-4 accent-[#4F3FF0] cursor-pointer"
-                />
-                <label htmlFor="isReactTaskCheck" className="text-xs font-bold text-slate-700 cursor-pointer">
-                  Is React-Specific Task?
-                </label>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 font-sans">
@@ -570,6 +515,36 @@ export const CareerTasks: React.FC = () => {
         </div>
       )}
 
+      {/* --- CUSTOM CONFIRM MODAL OVERLAY --- */}
+      {confirmModal.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="bg-white border border-[#E9EDF5] rounded-3xl p-6 w-full max-w-sm shadow-2xl relative text-center space-y-4">
+            <div className="mx-auto w-12 h-12 bg-rose-50 rounded-full flex items-center justify-center text-rose-500">
+              <Trash2 className="h-6 w-6" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-base font-black text-slate-800">Delete Career Task</h3>
+              <p className="text-slate-450 text-[11px] font-semibold leading-relaxed">
+                Are you sure you want to delete task <span className="font-extrabold text-slate-700">"{confirmModal.taskTitle}"</span>? This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-3 justify-center select-none pt-2">
+              <button
+                onClick={() => setConfirmModal({ show: false, taskId: '', taskTitle: '' })}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl transition-all cursor-pointer bg-white border border-slate-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeDeleteTask}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-sm shadow-rose-100"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
