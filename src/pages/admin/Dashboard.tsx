@@ -13,7 +13,7 @@ import Button from '@/components/common/Button';
 import { api } from '@/utils/api';
 import { useAuth } from '../../hooks/useAuth';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import type { Student, Batch, Enrollment, Course } from '@/interfaces';
+import type { Student, Batch } from '@/interfaces';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -53,8 +53,6 @@ const Dashboard: React.FC = () => {
 
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [careerStats, setCareerStats] = useState<CareerStatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,23 +72,17 @@ const Dashboard: React.FC = () => {
         const [
           studentsData,
           batchesData,
-          enrollmentsData,
-          coursesData,
           statsData,
           careerStatsData
         ] = await Promise.all([
           api.get<Student[]>('/api/v1/students'),
           api.get<Batch[]>('/api/v1/batches'),
-          api.get<Enrollment[]>('/api/v1/enrollments'),
-          api.get<Course[]>('/api/v1/courses'),
           api.get<DashboardStats>('/api/v1/dashboard/stats'),
           api.get<CareerStatsResponse>('/api/v1/career/stats').catch(() => null)
         ]);
 
         setStudents(studentsData);
         setBatches(batchesData);
-        setEnrollments(enrollmentsData);
-        setCourses(coursesData);
         setDashboardStats(statsData);
         setCareerStats(careerStatsData);
         setError(null);
@@ -155,36 +147,6 @@ const Dashboard: React.FC = () => {
       return { ...lvl, strokeDasharray, strokeDashoffset };
     });
   }, [levels]);
-
-  // Course Enrollments Bar Chart Calculations
-  const barChartData = useMemo(() => {
-    if (courses.length === 0) return [];
-
-    const counts = courses.map(course => {
-      const count = enrollments.filter(e => e.courseId === course.courseId).length;
-      let shortName = course.courseName;
-      if (shortName.length > 15) {
-        shortName = shortName.substring(0, 12) + '...';
-      }
-      return { name: shortName, count };
-    });
-
-    return counts.sort((a, b) => b.count - a.count).slice(0, 5);
-  }, [courses, enrollments]);
-
-  const scaledBars = useMemo(() => {
-    const maxCount = Math.max(...barChartData.map(b => b.count), 1);
-    const maxBarHeight = 130;
-    const baselineY = 190;
-
-    return barChartData.map((bar, index) => {
-      const height = (bar.count / maxCount) * maxBarHeight;
-      const y = baselineY - height;
-      const x = 60 + index * 85;
-      const textX = x + 15;
-      return { ...bar, x, y, height, textX };
-    });
-  }, [barChartData]);
 
   // Metrics Card Configuration
   const metrics = [
@@ -295,51 +257,7 @@ const Dashboard: React.FC = () => {
         })}
       </div>
 
-      {/* Charts Grid */}
-      <div className="grid grid-cols-1 gap-6">
-        {/* Student Course Enrollments Bar Chart */}
-        <div className="bg-white rounded-2xl border border-[#E9EDF5] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.01)] flex flex-col justify-between">
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold text-[#111111] tracking-tight">Student Course Enrollments</h3>
-            <p className="text-xs font-medium text-[#7E8B9B] mt-0.5">Total active enrollment breakdown per academic subject</p>
-          </div>
-          <div className="relative w-full h-[220px]">
-            {loading ? (
-              <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-400 font-semibold">Loading data...</div>
-            ) : barChartData.length === 0 ? (
-              <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-400 font-semibold">No enrollment records.</div>
-            ) : (
-              <svg viewBox="0 0 500 220" className="w-full h-full" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#4F3FF0" />
-                    <stop offset="100%" stopColor="#818CF8" />
-                  </linearGradient>
-                </defs>
 
-                {/* Dotted grid lines */}
-                <line x1="40" y1="40" x2="480" y2="40" stroke="#F1F5F9" strokeDasharray="3 3" strokeWidth="1" />
-                <line x1="40" y1="90" x2="480" y2="90" stroke="#F1F5F9" strokeDasharray="3 3" strokeWidth="1" />
-                <line x1="40" y1="140" x2="480" y2="140" stroke="#F1F5F9" strokeDasharray="3 3" strokeWidth="1" />
-                <line x1="40" y1="190" x2="480" y2="190" stroke="#E2E8F0" strokeWidth="1.5" />
-
-                {/* Render Dynamic Bars */}
-                {scaledBars.map((bar) => (
-                  <g key={bar.name}>
-                    <text x={bar.textX} y={bar.y - 8} textAnchor="middle" className="text-xs font-semibold fill-slate-800">
-                      {bar.count}
-                    </text>
-                    <rect x={bar.x} y={bar.y} width="30" height={bar.height} rx="4" ry="4" fill="url(#barGrad)" className="hover:opacity-90 transition-opacity cursor-pointer" />
-                    <text x={bar.textX} y="210" textAnchor="middle" className="text-xs font-medium fill-slate-500">
-                      {bar.name}
-                    </text>
-                  </g>
-                ))}
-              </svg>
-            )}
-          </div>
-        </div>
-      </div>
 
       {/* Middle Grid: Career Scale Distribution + System Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
