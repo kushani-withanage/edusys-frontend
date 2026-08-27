@@ -18,6 +18,7 @@ interface AuthContextType {
   loading: boolean;
   login: (credentials: AuthRequest) => Promise<AuthResponse>;
   logout: () => void;
+  loginWithToken: (token: string, user: User) => void;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -50,6 +51,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const response = await api.login(credentials);
 
+      if (response.mustSetPassword) {
+        // User must set password first, return raw response without updating global auth states
+        return response;
+      }
+
       // Save to localStorage
       localStorage.setItem('edusys_token', response.token);
       localStorage.setItem('edusys_user', JSON.stringify({
@@ -77,6 +83,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const loginWithToken = (tokenValue: string, userValue: User) => {
+    localStorage.setItem('edusys_token', tokenValue);
+    localStorage.setItem('edusys_user', JSON.stringify(userValue));
+    setToken(tokenValue);
+    setUser(userValue);
+  };
+
   const logout = () => {
     localStorage.removeItem('edusys_token');
     localStorage.removeItem('edusys_user');
@@ -91,6 +104,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     loading,
     login,
     logout,
+    loginWithToken,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

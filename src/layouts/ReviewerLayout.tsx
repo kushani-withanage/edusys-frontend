@@ -4,7 +4,8 @@ import {
   LayoutDashboard, 
   UserCheck, 
   Trophy,
-  Shield
+  Shield,
+  BookOpen
 } from 'lucide-react';
 
 const reviewerSidebarGroups: SidebarGroup[] = [
@@ -17,6 +18,7 @@ const reviewerSidebarGroups: SidebarGroup[] = [
   {
     category: 'Career scale evaluation',
     links: [
+      { label: 'My Assigned Modules', path: '/reviewer/courses', icon: BookOpen },
       { label: 'Reviewer Workflow', path: '/reviewer/workflow', icon: UserCheck },
       { label: 'Points & Levels', path: '/reviewer/points-levels', icon: Trophy },
     ]

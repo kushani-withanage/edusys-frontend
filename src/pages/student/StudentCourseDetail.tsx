@@ -51,6 +51,17 @@ const safeParseJson = (data: any, defaultValue: any = []) => {
   }
 };
 
+const filterNonQuiz = (sectionsJson: any) => {
+  const parsed = safeParseJson(sectionsJson);
+  if (!Array.isArray(parsed)) return [];
+  return parsed.map((sect: any) => ({
+    ...sect,
+    items: Array.isArray(sect.items) 
+      ? sect.items.filter((item: any) => item && item.type === 'quiz') 
+      : []
+  }));
+};
+
 const formatDatetimeLocal = (val?: string) => {
   if (!val) return '';
   let formatted = val.replace(' ', 'T');
@@ -65,7 +76,8 @@ export const StudentCourseDetail: React.FC = () => {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
   
-  const isAdmin = user?.role === 'ADMIN';
+  const isAdmin = user?.role?.toUpperCase() === 'ADMIN' || user?.role?.toUpperCase() === 'TEACHER' || user?.role?.toUpperCase() === 'REVIEWER';
+  const pathPrefix = user?.role?.toUpperCase() === 'TEACHER' ? '/teacher' : user?.role?.toUpperCase() === 'REVIEWER' ? '/reviewer' : '/admin';
 
   const [course, setCourse] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -156,7 +168,7 @@ export const StudentCourseDetail: React.FC = () => {
             certReqs: safeParseJson(dbCourse.certReqs),
             qualifyIntro: dbCourse.qualifyIntro || '',
             qualifyReqs: safeParseJson(dbCourse.qualifyReqs),
-            sections: safeParseJson(dbCourse.sections),
+            sections: filterNonQuiz(dbCourse.sections),
             isCompulsory: dbCourse.isCompulsory !== false,
             description: dbCourse.description || '',
             credits: dbCourse.credits,
@@ -183,7 +195,7 @@ export const StudentCourseDetail: React.FC = () => {
               certReqs: safeParseJson(found.certReqs),
               qualifyIntro: found.qualifyIntro || '',
               qualifyReqs: safeParseJson(found.qualifyReqs),
-              sections: safeParseJson(found.sections),
+              sections: filterNonQuiz(found.sections),
               isCompulsory: found.isCompulsory !== undefined ? found.isCompulsory : true,
               description: found.description || ''
             });
@@ -769,11 +781,23 @@ export const StudentCourseDetail: React.FC = () => {
             </>
           )}
           <Link 
-            to={isAdmin ? "/admin/courses-calendars?tab=courses" : "/student/academics"} 
+            to={user?.role?.toUpperCase() === 'ADMIN' 
+              ? "/admin/courses-calendars?tab=courses" 
+              : user?.role?.toUpperCase() === 'TEACHER' 
+                ? "/teacher/courses" 
+                : user?.role?.toUpperCase() === 'REVIEWER'
+                  ? "/reviewer/courses"
+                  : "/student/academics"} 
             className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-650 hover:text-[#4F3FF0] transition-colors"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            {isAdmin ? "Back to Courses Desk" : "Back to Academics"}
+            {user?.role?.toUpperCase() === 'ADMIN' 
+              ? "Back to Courses Desk" 
+              : user?.role?.toUpperCase() === 'TEACHER' 
+                ? "Back to Courses" 
+                : user?.role?.toUpperCase() === 'REVIEWER'
+                  ? "Back to Courses"
+                  : "Back to Academics"}
           </Link>
         </div>
       </div>
@@ -1211,7 +1235,7 @@ export const StudentCourseDetail: React.FC = () => {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => navigate(`/admin/courses/${courseId || 'crs0001'}/sections/${idx}/assignments/${item.id}/edit`)}
+                                  onClick={() => navigate(`${pathPrefix}/courses/${courseId || 'crs0001'}/sections/${idx}/assignments/${item.id}/edit`)}
                                   className="px-3.5 py-1.5 border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-50 text-[#4F3FF0] hover:text-[#3D2ED0] text-[10.5px] font-black rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-sm"
                                 >
                                   📄 Go to page
@@ -1243,20 +1267,6 @@ export const StudentCourseDetail: React.FC = () => {
 
                     {/* Quick Add Buttons */}
                     <div className="flex flex-wrap gap-2 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => handleAddSyllabusItem(idx, 'resource')}
-                        className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/50 text-[9px] font-black rounded-lg transition-all cursor-pointer inline-flex items-center gap-0.5"
-                      >
-                        <Plus className="h-3 w-3" /> Add Resource PDF
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/admin/courses/${courseId || 'ICD110'}/sections/${idx}/assignments/new`)}
-                        className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-[#4F3FF0] border border-indigo-200/50 text-[9px] font-black rounded-lg transition-all cursor-pointer inline-flex items-center gap-0.5"
-                      >
-                        <Plus className="h-3 w-3" /> Add Assignment
-                      </button>
                       <button
                         type="button"
                         onClick={() => handleAddSyllabusItem(idx, 'quiz')}
@@ -1469,8 +1479,38 @@ export const StudentCourseDetail: React.FC = () => {
                                                    </span>
                                                  </div>
                                                  <div className="space-y-1 mt-1 text-[11px]">
-                                                   <div className="truncate" title={submissions[item.id].submittedFile}>
-                                                     File: <span className="text-[#4F3FF0] font-extrabold">📎 {submissions[item.id].submittedFile.substring(submissions[item.id].submittedFile.indexOf('_') + 1)}</span>
+                                                   <div className="truncate">
+                                                     File: {(() => {
+                                                       const fileStr = submissions[item.id].submittedFile;
+                                                       let fileList: { name: string; url: string }[] = [];
+                                                       if (fileStr) {
+                                                         if (fileStr.startsWith('[')) {
+                                                           try {
+                                                             fileList = JSON.parse(fileStr);
+                                                           } catch (e) {
+                                                             console.error('Error parsing submittedFile JSON:', e);
+                                                           }
+                                                         } else {
+                                                           const name = fileStr.substring(fileStr.indexOf('_') + 1) || 'File';
+                                                           fileList = [{ name, url: fileStr }];
+                                                         }
+                                                       }
+                                                       
+                                                       if (fileList.length === 0) return <span className="text-slate-400 font-medium">No file</span>;
+                                                       
+                                                       return fileList.map((f, fIdx) => (
+                                                         <a
+                                                           key={fIdx}
+                                                           href={f.url.startsWith('http') ? f.url : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}${f.url}`}
+                                                           target="_blank"
+                                                           rel="noopener noreferrer"
+                                                           onClick={(e) => e.stopPropagation()}
+                                                           className="text-[#4F3FF0] hover:underline font-extrabold mr-2 inline-flex items-center gap-0.5"
+                                                         >
+                                                           📎 {f.name}
+                                                         </a>
+                                                       ));
+                                                     })()}
                                                    </div>
                                                    <div>
                                                      Submitted: <span className="text-slate-850 font-extrabold">{new Date(submissions[item.id].submitDate).toLocaleString()}</span>
@@ -1589,7 +1629,13 @@ export const StudentCourseDetail: React.FC = () => {
                     }
 
                     toast.success('Course deleted successfully!');
-                    navigate('/admin/courses-calendars?tab=courses');
+                    navigate(
+                      user?.role?.toUpperCase() === 'TEACHER' 
+                        ? '/teacher/courses' 
+                        : user?.role?.toUpperCase() === 'REVIEWER' 
+                        ? '/reviewer/courses' 
+                        : '/admin/courses-calendars?tab=courses'
+                    );
                   } catch (err) {
                     console.error(err);
                     toast.error('Failed to delete course.');

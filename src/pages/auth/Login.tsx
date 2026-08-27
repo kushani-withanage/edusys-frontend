@@ -41,6 +41,20 @@ export const Login: React.FC = () => {
     try {
       const response = await login({ email, password });
 
+      if (response.mustSetPassword) {
+        navigate('/set-password', {
+          replace: true,
+          state: {
+            tempToken: response.token,
+            userId: response.userId,
+            fullName: response.fullName,
+            email: response.email,
+            role: response.role
+          }
+        });
+        return;
+      }
+
       const role = response.role.toUpperCase();
       if (role === 'ADMIN') {
         navigate('/admin/dashboard', { replace: true });

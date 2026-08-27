@@ -6,6 +6,7 @@ export interface AuthResponse {
   fullName: string;
   email: string;
   role: string;
+  mustSetPassword?: boolean;
 }
 
 export interface AuthRequest {
@@ -36,7 +37,20 @@ function getHeaders(extraHeaders: any = {}): Record<string, string> {
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(errorText || `Request failed with status ${response.status}`);
+    let message = `Request failed with status ${response.status}`;
+    try {
+      const parsed = JSON.parse(errorText);
+      if (parsed.message) {
+        message = parsed.message;
+      } else if (parsed.error) {
+        message = parsed.error;
+      }
+    } catch {
+      if (errorText && errorText.trim().length > 0) {
+        message = errorText;
+      }
+    }
+    throw new Error(message);
   }
   const text = await response.text();
   return (text ? JSON.parse(text) : {}) as T;

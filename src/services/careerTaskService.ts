@@ -8,25 +8,10 @@ export interface CareerTaskData {
   title: string;
   description: string;
   pointsValue: number;
-  submissionType: string; // LINK, IMAGE, PDF, FILE
   isActive?: boolean;
   createdBy?: string;
   createdAt?: string;
-}
-
-export interface CareerLevelBatchAccessData {
-  id: string;
-  level: {
-    id: string;
-    levelNumber: number;
-    title: string;
-  };
-  batch: {
-    batchId: string;
-    batchName: string;
-  };
-  isOpen: boolean;
-  openedAt: string;
+  batchIds?: string[];
 }
 
 export const careerTaskService = {
@@ -52,16 +37,6 @@ export const careerTaskService = {
 
   async deleteTask(taskId: string) {
     return api.delete<void>(`/api/v1/career-tasks/${taskId}`);
-  },
-
-  async getBatchAccess() {
-    return api.get<CareerLevelBatchAccessData[]>('/api/v1/career-tasks/batch-access');
-  },
-
-  async toggleBatchAccess(levelId: string, batchId: string, openedBy?: string) {
-    let url = `/api/v1/career-tasks/batch-access/toggle?levelId=${levelId}&batchId=${batchId}`;
-    if (openedBy) url += `&openedBy=${openedBy}`;
-    return api.post<CareerLevelBatchAccessData>(url, {});
   }
 };
 

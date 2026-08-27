@@ -7,16 +7,11 @@ import {
   ChevronRight, 
   Edit2, 
   Trash2, 
-  ChevronLeft, 
   Loader2, 
-  AlertCircle,
-  ShieldAlert,
-  Award
+  AlertCircle
 } from 'lucide-react';
 import Button from '@/components/common/Button';
 import { api } from '@/utils/api';
-import { careerSubmissionService as reviewService } from '@/services/careerSubmissionService';
-import { pointsLevelService, type CareerLevelData } from '@/services/pointsLevelService';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export interface User {
@@ -27,45 +22,138 @@ export interface User {
   phone: string;
   status: string;
   createdAt: string;
+  firstLogin?: string;
+  lastLogin?: string;
 }
 
 export const UsersRoles: React.FC = () => {
   const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
-  const [levels, setLevels] = useState<CareerLevelData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Filtering & Pagination State
+  // Filtering & Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState('All');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedBatch, setSelectedBatch] = useState('All');
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
   const [submittingDelete, setSubmittingDelete] = useState(false);
-  
-  const itemsPerPage = 5;
+  const [students, setStudents] = useState<any[]>([]);
 
-  // Override Modal States
-  const [showOverrideModal, setShowOverrideModal] = useState(false);
-  const [overrideStudent, setOverrideStudent] = useState<{ id: string; name: string } | null>(null);
-  const [overrideForm, setOverrideForm] = useState({
-    levelId: '',
-    reason: ''
-  });
-  const [overrideSubmitting, setOverrideSubmitting] = useState(false);
+
+
+  // User Details Modal States
+  const [viewingUser, setViewingUser] = useState<User | null>(null);
+  const [viewingUserDetails, setViewingUserDetails] = useState<any | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [batches, setBatches] = useState<any[]>([]);
+
+  const handleUserClick = async (user: User) => {
+    setViewingUser(user);
+    setViewingUserDetails(null);
+    const roleUpper = user.role.toUpperCase();
+    if (roleUpper === 'STUDENT') {
+      try {
+        setLoadingDetails(true);
+        const details = await api.get<any>(`/api/v1/students/${user.userId}`);
+        setViewingUserDetails(details);
+      } catch (err) {
+        console.error('Failed to load student details:', err);
+      } finally {
+        setLoadingDetails(false);
+      }
+    } else if (roleUpper === 'PARENT') {
+      try {
+        setLoadingDetails(true);
+        const details = await api.get<any>(`/api/v1/parents/${user.userId}`);
+        
+        // Find linked students
+        const links = await api.get<any[]>('/api/v1/parent-student-links').catch(() => []);
+        const parentLinks = links.filter(l => l.parentId === user.userId);
+        
+        let linkedStudentNames: string[] = [];
+        for (const parentLink of parentLinks) {
+          const studentUser = users.find(u => u.userId === parentLink.studentId);
+          if (studentUser) {
+            linkedStudentNames.push(studentUser.fullName);
+          }
+        }
+        
+        setViewingUserDetails({
+          ...details,
+          linkedStudentNames: linkedStudentNames.join(', ') || 'None'
+        });
+      } catch (err) {
+        console.error('Failed to load parent details:', err);
+      } finally {
+        setLoadingDetails(false);
+      }
+    }
+  };
+
+  const formatAccessTime = (dateStr: string) => {
+    if (!dateStr) return 'Never';
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    const weekday = weekdays[date.getDay()];
+    const day = date.getDate();
+    const month = months[date.getMonth()];
+    const year = date.getFullYear();
+    
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    
+    const formattedDate = `${weekday}, ${day} ${month} ${year}, ${hours}:${minutes} ${ampm}`;
+    
+    const diffMs = new Date().getTime() - date.getTime();
+    if (diffMs < 0) return formattedDate;
+    
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    const diffYears = Math.floor(diffDays / 365);
+    const remDays = diffDays % 365;
+
+    let relative = '';
+    if (diffMins < 1) {
+      relative = 'just now';
+    } else if (diffMins < 60) {
+      relative = `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
+    } else if (diffHours < 24) {
+      relative = `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    } else if (diffYears > 0) {
+      relative = `${diffYears} year${diffYears > 1 ? 's' : ''} ${remDays} day${remDays !== 1 ? 's' : ''}`;
+    } else {
+      relative = `${diffDays} day${diffDays > 1 ? 's' : ''}`;
+    }
+    return `${formattedDate} (${relative})`;
+  };
+
+  const formatLastAccessTime = (lastLogin?: string) => {
+    if (!lastLogin) return 'Never';
+    return formatAccessTime(lastLogin);
+  };
 
   const fetchUsersAndLevels = async () => {
     try {
       setLoading(true);
-      const [usersData, levelsData] = await Promise.all([
+      const [usersData, batchesData, studentsData] = await Promise.all([
         api.get<User[]>('/api/v1/users'),
-        pointsLevelService.getLevels().catch(() => [])
+        api.get<any[]>('/api/v1/batches').catch(() => []),
+        api.get<any[]>('/api/v1/students').catch(() => [])
       ]);
       setUsers(usersData || []);
-      setLevels(levelsData || []);
+      setBatches(batchesData || []);
+      setStudents(studentsData || []);
       setError(null);
     } catch (err: any) {
-      console.error('Error fetching users/levels:', err);
+      console.error('Error fetching users/batches/students:', err);
       setError('Could not fetch data. Please verify that backend is running.');
     } finally {
       setLoading(false);
@@ -76,42 +164,6 @@ export const UsersRoles: React.FC = () => {
     fetchUsersAndLevels();
   }, []);
 
-
-
-  // Handle Override Click
-  const handleOverrideClick = (studentId: string, name: string) => {
-    setOverrideStudent({ id: studentId, name });
-    setOverrideForm({
-      levelId: levels.length > 0 ? (levels[0].id || '') : '',
-      reason: ''
-    });
-    setShowOverrideModal(true);
-  };
-
-  // Submit Override Form
-  const handleOverrideSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!overrideStudent || !overrideForm.levelId || !overrideForm.reason.trim()) {
-      alert('Please fill out all fields.');
-      return;
-    }
-
-    try {
-      setOverrideSubmitting(true);
-      await reviewService.overrideStudentLevel(
-        overrideStudent.id,
-        overrideForm.levelId,
-        overrideForm.reason
-      );
-      alert(`Successfully overridden ${overrideStudent.name}'s level stage.`);
-      setShowOverrideModal(false);
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message || 'Failed to submit level override.');
-    } finally {
-      setOverrideSubmitting(false);
-    }
-  };
 
   // Filtered Users List
   const filteredUsers = useMemo(() => {
@@ -124,39 +176,15 @@ export const UsersRoles: React.FC = () => {
         selectedRole === 'All' || 
         user.role.toUpperCase() === selectedRole.toUpperCase();
 
-      return matchesSearch && matchesRole;
+      let matchesBatch = true;
+      if (selectedBatch !== 'All') {
+        const studentProfile = students.find(s => s.studentId === user.userId);
+        matchesBatch = studentProfile?.currentBatchId === selectedBatch;
+      }
+
+      return matchesSearch && matchesRole && matchesBatch;
     });
-  }, [users, searchQuery, selectedRole]);
-
-  // Paginated Users List
-  const paginatedUsers = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredUsers.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredUsers, currentPage]);
-
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, selectedRole]);
-
-  const getRoleBadgeClass = (role: string) => {
-    const upperRole = role.toUpperCase();
-    switch (upperRole) {
-      case 'ADMIN':
-        return 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200';
-      case 'TEACHER':
-        return 'bg-indigo-50 text-[#4F3FF0] border-indigo-200';
-      case 'REVIEWER':
-        return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'STUDENT':
-        return 'bg-slate-100 text-slate-650 border-slate-200';
-      case 'PARENT':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-255';
-      default:
-        return 'bg-slate-100 text-slate-650 border-slate-250';
-    }
-  };
+  }, [users, searchQuery, selectedRole, selectedBatch, students]);
 
   const getRoleDisplay = (role: string) => {
     const upperRole = role.toUpperCase();
@@ -166,6 +194,14 @@ export const UsersRoles: React.FC = () => {
     if (upperRole === 'STUDENT') return 'Student';
     if (upperRole === 'PARENT') return 'Parent';
     return role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
+  };
+
+  const getStatusBadgeClass = (status: string) => {
+    const s = (status || 'ACTIVE').toUpperCase();
+    if (s === 'ACTIVE') {
+      return 'border-emerald-250 bg-emerald-50 text-emerald-700';
+    }
+    return 'border-slate-350 bg-slate-100 text-slate-650';
   };
 
   return (
@@ -212,7 +248,19 @@ export const UsersRoles: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-          <span className="text-[10px] font-bold text-slate-450 tracking-wider uppercase select-none">ROLE:</span>
+          <span className="text-[10px] font-bold text-slate-455 tracking-wider uppercase select-none">BATCH:</span>
+          <select
+            value={selectedBatch}
+            onChange={(e) => setSelectedBatch(e.target.value)}
+            className="bg-white border border-[#E2E8F0] rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-[#4F3FF0] cursor-pointer"
+          >
+            <option value="All">All Batches</option>
+            {batches.map(b => (
+              <option key={b.batchId} value={b.batchId}>{b.batchName}</option>
+            ))}
+          </select>
+
+          <span className="text-[10px] font-bold text-slate-455 tracking-wider uppercase select-none ml-2">ROLE:</span>
           <select
             value={selectedRole}
             onChange={(e) => setSelectedRole(e.target.value)}
@@ -257,21 +305,20 @@ export const UsersRoles: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E9EDF5] text-slate-800 text-xs font-semibold">
-                {paginatedUsers.map((user) => (
+                {filteredUsers.map((user) => (
                   <tr 
                     key={user.userId} 
-                    className="hover:bg-slate-50/40 transition-colors duration-150"
+                    className="hover:bg-slate-50/40 transition-colors duration-150 cursor-pointer"
+                    onClick={() => handleUserClick(user)}
                   >
                     <td className="px-6 py-4.5 text-slate-400">
                       <ChevronRight className="h-4 w-4" />
                     </td>
-                    <td className="px-6 py-4.5 font-extrabold text-slate-800">
+                    <td className="px-6 py-4.5 font-extrabold text-slate-800 hover:underline">
                       {user.fullName}
                     </td>
-                    <td className="px-6 py-4.5">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 border text-xs font-semibold rounded-full ${getRoleBadgeClass(user.role)}`}>
-                        {getRoleDisplay(user.role)}
-                      </span>
+                    <td className="px-6 py-4.5 text-slate-600 font-bold">
+                      {getRoleDisplay(user.role)}
                     </td>
                     <td className="px-6 py-4.5 text-slate-500 font-medium">
                       {user.email}
@@ -280,30 +327,28 @@ export const UsersRoles: React.FC = () => {
                       {user.phone || '-'}
                     </td>
                     <td className="px-6 py-4.5">
-                      <span className="inline-flex items-center px-2.5 py-0.5 border border-emerald-250 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 border text-xs font-semibold rounded-full ${getStatusBadgeClass(user.status)}`}>
                         {user.status || 'Active'}
                       </span>
                     </td>
                     <td className="px-6 py-4.5 text-right select-none">
                       <div className="flex justify-end gap-2">
-                        {user.role.toUpperCase() === 'STUDENT' && (
-                          <button
-                            onClick={() => handleOverrideClick(user.userId, user.fullName)}
-                            className="p-1.5 hover:bg-indigo-50 text-slate-400 hover:text-[#4F3FF0] rounded-lg transition-colors cursor-pointer"
-                            title="Override Career Level"
-                          >
-                            <ShieldAlert className="h-4 w-4" />
-                          </button>
-                        )}
                         <button
-                          title="Edit User details (Not implemented)"
-                          className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-[#4F3FF0] rounded-lg transition-colors cursor-not-allowed"
-                          disabled
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            localStorage.setItem(`user_name_${user.userId}`, user.fullName);
+                            navigate(`/admin/users-roles/edit/${user.userId}`);
+                          }}
+                          className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-[#4F3FF0] rounded-lg transition-colors cursor-pointer"
+                          title="Edit User Details"
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => setDeletingUser(user)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingUser(user);
+                          }}
                           className="p-1.5 hover:bg-rose-50 text-slate-450 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
                           title="Delete User"
                         >
@@ -318,105 +363,15 @@ export const UsersRoles: React.FC = () => {
           </div>
         )}
 
-        {/* Table Pagination Footer */}
+        {/* Table Total Users Footer */}
         {!loading && filteredUsers.length > 0 && (
           <div className="flex items-center justify-between px-6 py-4 border-t border-[#E9EDF5] bg-white select-none">
-            <span className="text-xs font-medium text-slate-500">
-              Showing {Math.min(filteredUsers.length, (currentPage - 1) * itemsPerPage + 1)} to{' '}
-              {Math.min(filteredUsers.length, currentPage * itemsPerPage)} of {filteredUsers.length} users
+            <span className="text-xs font-semibold text-slate-500">
+              Showing all {filteredUsers.length} users
             </span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 text-xs font-semibold rounded-xl text-slate-700 hover:bg-slate-50 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent active:scale-[0.98]"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                Previous
-              </button>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-                className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 text-xs font-semibold rounded-xl text-slate-700 hover:bg-slate-50 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent active:scale-[0.98]"
-              >
-                Next
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
           </div>
         )}
       </div>
-
-      {/* --- LEVEL OVERRIDE MODAL --- */}
-      {showOverrideModal && overrideStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="bg-white border border-[#E9EDF5] rounded-3xl p-6 w-full max-w-md shadow-2xl relative text-left">
-            <h3 className="text-base font-black text-slate-800 mb-1 flex items-center gap-2 select-none">
-              <Award className="h-5 w-5 text-[#4F3FF0]" />
-              Administrative Level Override
-            </h3>
-            <p className="text-slate-450 text-[10px] font-bold mb-4 uppercase tracking-wider">Directly upgrade student's career milestone and reset level points.</p>
-
-            <div className="mb-4 p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-bold text-slate-500 space-y-1">
-              <div className="flex justify-between">
-                <span>Student Name:</span>
-                <span className="text-slate-800">{overrideStudent.name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Student ID:</span>
-                <span className="text-slate-800">{overrideStudent.id}</span>
-              </div>
-            </div>
-
-            <form onSubmit={handleOverrideSubmit} className="space-y-4 font-sans">
-              <div className="space-y-1">
-                <label className="block text-[10px] font-extrabold tracking-wider uppercase text-slate-500 select-none">Target Career Level *</label>
-                <select
-                  value={overrideForm.levelId}
-                  onChange={e => setOverrideForm(prev => ({ ...prev, levelId: e.target.value }))}
-                  className="w-full pl-3 pr-8 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-xs text-slate-800 font-bold outline-none focus:bg-white cursor-pointer"
-                  required
-                >
-                  <option value="" disabled>Select Level</option>
-                  {levels.map(l => (
-                    <option key={l.id} value={l.id}>L{l.levelNumber} - {l.title}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-[10px] font-extrabold tracking-wider uppercase text-slate-500 select-none">Override Audit Reason *</label>
-                <textarea
-                  value={overrideForm.reason}
-                  onChange={e => setOverrideForm(prev => ({ ...prev, reason: e.target.value }))}
-                  placeholder="Provide audit reason for directly editing student stage progression..."
-                  className="w-full pl-4 pr-4 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-xs text-slate-850 placeholder-slate-450 outline-none focus:bg-white focus:ring-4 focus:ring-[#4F3FF0]/10 min-h-[80px]"
-                  required
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 font-sans select-none">
-                <button
-                  type="button"
-                  onClick={() => setShowOverrideModal(false)}
-                  className="px-5 py-2.5 border border-[#E2E8F0] text-slate-500 text-xs font-bold rounded-xl cursor-pointer"
-                  disabled={overrideSubmitting}
-                >
-                  Cancel
-                </button>
-                <Button
-                  type="submit"
-                  variant="solid"
-                  color="primary"
-                  isLoading={overrideSubmitting}
-                >
-                  Confirm Override
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Custom Delete User Confirm Modal */}
       {deletingUser && (
@@ -465,6 +420,138 @@ export const UsersRoles: React.FC = () => {
                 ) : (
                   'Confirm Delete'
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- USER DETAILS MODAL --- */}
+      {viewingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-[#F8FAFC] border border-[#E9EDF5] rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative text-left my-8">
+            <button 
+              onClick={() => setViewingUser(null)}
+              className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-650 hover:bg-slate-100 rounded-xl transition-all cursor-pointer font-bold text-sm"
+              title="Close Details"
+            >
+              ✕
+            </button>
+            <h2 className="text-xl font-black text-slate-800 mb-6 select-none border-b border-[#E9EDF5] pb-4">
+              Profile: {viewingUser.fullName}
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* User details Card */}
+              <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm space-y-4">
+                <h3 className="text-base font-bold text-slate-800 border-b border-slate-55 pb-2">User details</h3>
+                <span className="text-xs text-blue-600 hover:underline cursor-pointer block font-semibold">
+                  Edit profile
+                </span>
+
+                <div className="space-y-1">
+                  <span className="block text-xs font-bold text-slate-700">Email address</span>
+                  <span className="block text-xs text-slate-500 pl-2">
+                    <span className="text-blue-600 hover:underline cursor-pointer">{viewingUser.email}</span> (Hidden from everyone except users with appropriate permissions)
+                  </span>
+                </div>
+
+                {viewingUser.role.toUpperCase() === 'STUDENT' && (
+                  <div className="space-y-1">
+                    <span className="block text-xs font-bold text-slate-700">Batch</span>
+                    <span className="block text-xs text-slate-500 pl-2">
+                      {loadingDetails ? 'Loading...' : (batches.find(b => b.batchId === viewingUserDetails?.currentBatchId)?.batchName || 'No Batch')}
+                    </span>
+                  </div>
+                )}
+
+                {viewingUser.role.toUpperCase() !== 'STUDENT' && viewingUser.role.toUpperCase() !== 'PARENT' && (
+                  <div className="space-y-1">
+                    <span className="block text-xs font-bold text-slate-700">Country</span>
+                    <span className="block text-xs text-slate-500 pl-2">Sri Lanka</span>
+                  </div>
+                )}
+
+                {viewingUser.role.toUpperCase() !== 'PARENT' && (
+                  <div className="space-y-1">
+                    <span className="block text-xs font-bold text-slate-700">Gender</span>
+                    <span className="block text-xs text-slate-500 pl-2 capitalize">
+                      {loadingDetails ? 'Loading...' : (viewingUserDetails?.gender || 'Not specified')}
+                    </span>
+                  </div>
+                )}
+
+                {viewingUser.role.toUpperCase() === 'PARENT' && (
+                  <>
+                    <div className="space-y-1">
+                      <span className="block text-xs font-bold text-slate-700">Occupation</span>
+                      <span className="block text-xs text-slate-500 pl-2">
+                        {loadingDetails ? 'Loading...' : (viewingUserDetails?.occupation || '-')}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="block text-xs font-bold text-slate-700">Related Student(s)</span>
+                      <span className="block text-xs text-slate-500 pl-2 font-bold text-[#4F3FF0]">
+                        {loadingDetails ? 'Loading...' : (viewingUserDetails?.linkedStudentNames || '-')}
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                {viewingUser.role.toUpperCase() === 'STUDENT' && (
+                  <>
+                    <div className="space-y-1">
+                      <span className="block text-xs font-bold text-slate-700">Guardian Name</span>
+                      <span className="block text-xs text-slate-500 pl-2">
+                        {loadingDetails ? 'Loading...' : (viewingUserDetails?.guardianName || '-')}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="block text-xs font-bold text-slate-700">Guardian Email</span>
+                      <span className="block text-xs text-slate-500 pl-2">
+                        {loadingDetails ? 'Loading...' : (viewingUserDetails?.guardianEmail || '-')}
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                <div className="space-y-1">
+                  <span className="block text-xs font-bold text-slate-700">Contact numbers</span>
+                  <span className="block text-xs text-slate-500 pl-2">
+                    {viewingUser.phone || '-'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Login activity Card */}
+              <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm space-y-4">
+                <h3 className="text-base font-bold text-slate-800 border-b border-slate-55 pb-2">Login activity</h3>
+
+                <div className="space-y-1">
+                  <span className="block text-xs font-bold text-slate-700">First access to site</span>
+                  <span className="block text-xs text-slate-500 pl-2">
+                    {formatAccessTime(viewingUser.firstLogin || '')}
+                  </span>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="block text-xs font-bold text-slate-700">Last access to site</span>
+                  <span className="block text-xs text-slate-500 pl-2">
+                    {formatLastAccessTime(viewingUser.lastLogin)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end pt-6 mt-6 border-t border-slate-100 font-sans select-none">
+              <button
+                type="button"
+                onClick={() => setViewingUser(null)}
+                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl cursor-pointer shadow-sm transition-all"
+              >
+                Close
               </button>
             </div>
           </div>

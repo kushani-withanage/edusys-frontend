@@ -17,10 +17,13 @@ import {
 import { api } from '@/utils/api';
 import { examService } from '@/services/examService';
 import { toast } from '@/utils/toast';
+import { useAuth } from '@/hooks/useAuth';
 
 export const ExamBuilderPage: React.FC = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { examId } = useParams();
+  const pathPrefix = user?.role?.toUpperCase() === 'TEACHER' ? '/teacher' : '/admin';
 
   // Steps
   const [step, setStep] = useState(1);
@@ -209,7 +212,7 @@ export const ExamBuilderPage: React.FC = () => {
       attemptsAllowed: attemptsVal,
       audiences,
       questionIds: selectedQuestionIds,
-      createdBy: 'usr0007' // Logged in user ID (admin)
+      createdBy: user?.userId || 'usr0007' // Logged in user ID (admin)
     };
 
     const performSave = async () => {
@@ -231,7 +234,7 @@ export const ExamBuilderPage: React.FC = () => {
           toast.success(examId ? 'Exam draft updated successfully!' : 'Exam draft created successfully!');
           alert(examId ? 'Exam draft updated successfully!' : 'Exam draft created successfully!');
         }
-        navigate('/admin/exams');
+        navigate(`${pathPrefix}/exams`);
       } catch (err: any) {
         console.error(err);
         const errMsg = err.message || 'Failed to save exam.';

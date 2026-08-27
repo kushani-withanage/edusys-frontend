@@ -1,198 +1,452 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  User,
-  BookOpen,
-  DollarSign,
-  Award,
-  Loader2,
-  AlertCircle
+  User, 
+  Award, 
+  Loader2, 
+  AlertCircle,
+  FileText,
+  Mail,
+  GraduationCap,
+  Layers,
+  Bookmark
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import { parentService } from '@/services/parentService';
-import { studentService } from '@/services/studentService';
-import { feeService } from '@/services/feeService';
+import { api } from '@/utils/api';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
-interface LinkedChild {
+interface Child {
   studentId: string;
   fullName: string;
   email: string;
+  nic: string;
   regNo: string;
+  currentBatchId: string;
+  batchName: string;
+}
+
+
+
+interface ExamRecord {
+  attemptId: string;
+  examId: string;
+  examTitle: string;
+  startedAt: string;
+  submittedAt: string | null;
   status: string;
-  balance: number;
+  score: number | null;
+  courseName: string;
+}
+
+interface CareerSubmission {
+  submissionId: string;
+  taskTitle: string;
+  status: string;
+  pointsAwarded: number | null;
+  feedback: string | null;
+  submittedAt: string;
+}
+
+interface CareerScaleProgress {
+  levelName: string;
+  levelIndex: number;
   points: number;
+  pointsRequired: number;
+  submissions: CareerSubmission[];
 }
 
 export const ParentDashboard: React.FC = () => {
-  const { user } = useAuth();
+  const [children, setChildren] = useState<Child[]>([]);
+  const [selectedChild, setSelectedChild] = useState<Child | null>(null);
+  
 
-  // --- States ---
-  const [loading, setLoading] = useState(true);
+  const [exams, setExams] = useState<ExamRecord[]>([]);
+  const [careerScale, setCareerScale] = useState<CareerScaleProgress | null>(null);
+
+  const [loadingChildren, setLoadingChildren] = useState(true);
+  const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [childrenList, setChildrenList] = useState<LinkedChild[]>([]);
 
-  // Simulated Fallback Child
-  const fallbackChild: LinkedChild = useMemo(() => ({
-    studentId: 'stud-1',
-    fullName: 'Sachin Samarawickrama',
-    email: 'sachin@edusys.edu',
-    regNo: 'BIT-2026-981',
-    status: 'ACTIVE',
-    balance: 350,
-    points: 240
-  }), []);
+  // Tabs: 'exams' | 'career'
+  const [activeTab, setActiveTab] = useState<'exams' | 'career'>('exams');
 
+  // Load children on mount
   useEffect(() => {
-    const fetchChildData = async () => {
+    const fetchChildren = async () => {
       try {
-        setLoading(true);
+        setLoadingChildren(true);
         setError(null);
-
-        // Fetch parent-student links
-        const links = await parentService.getLinks().catch(() => []);
-        
-        // Find links matching parent's userId
-        const parentLinks = links.filter(l => l.parentId === user?.userId);
-
-        if (parentLinks.length === 0) {
-          // Fallback to static mock for presentation
-          setChildrenList([fallbackChild]);
-          return;
+        const data = await api.get<Child[]>('/api/v1/parent/children');
+        setChildren(data || []);
+        if (data && data.length > 0) {
+          setSelectedChild(data[0]);
         }
-
-        // Fetch details for each child
-        const students = await studentService.getStudents().catch(() => []);
-        const feeRecords = await feeService.getFeeRecords().catch(() => []);
-
-        const mappedChildren: LinkedChild[] = parentLinks.map(link => {
-          const childProfile = students.find(s => s.studentId === link.studentId);
-          const childBilling = feeRecords.find((fr: any) => fr.studentId === link.studentId);
-
-          return {
-            studentId: link.studentId,
-            fullName: childProfile?.fullName || 'Child Student',
-            email: childProfile?.email || 'child@edusys.edu',
-            regNo: childProfile?.regNo || 'BIT-2026-981',
-            status: childProfile?.status || 'ACTIVE',
-            balance: childBilling?.amount || 350,
-            points: 240 // mock points ledger value
-          };
-        });
-
-        setChildrenList(mappedChildren);
       } catch (err: any) {
         console.error(err);
-        setError('Sandbox Mode: Rendering simulated student links.');
-        setChildrenList([fallbackChild]);
+        setError('Failed to fetch linked children. Please verify connection to the server.');
       } finally {
-        setLoading(false);
+        setLoadingChildren(false);
       }
     };
+    fetchChildren();
+  }, []);
+
+  // Load child portfolio data when selectedChild changes
+  useEffect(() => {
+    if (!selectedChild) return;
+
+    const fetchChildData = async () => {
+      try {
+        setLoadingData(true);
+        
+        const [examsData, careerData] = await Promise.all([
+          api.get<ExamRecord[]>(`/api/v1/parent/children/${selectedChild.studentId}/exams`),
+          api.get<CareerScaleProgress>(`/api/v1/parent/children/${selectedChild.studentId}/career-scale`)
+        ]);
+
+        setExams(examsData || []);
+        setCareerScale(careerData || null);
+      } catch (err: any) {
+        console.error(err);
+        // Silently capture or show generic notice
+      } finally {
+        setLoadingData(false);
+      }
+    };
+
     fetchChildData();
-  }, [user, fallbackChild]);
+  }, [selectedChild]);
+
+  // Calculate Rolling GPA
+  const rollingGpa = React.useMemo(() => {
+    if (exams.length === 0) return 'N/A';
+    const graded = exams.filter(e => e.score !== null);
+    if (graded.length === 0) return 'N/A';
+    const sum = graded.reduce((acc, curr) => acc + (curr.score || 0), 0);
+    return (sum / graded.length).toFixed(1) + '%';
+  }, [exams]);
+
+  // Format date helper
+  const formatDate = (isoString: string | null) => {
+    if (!isoString) return 'Pending';
+    return new Date(isoString).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  if (loadingChildren) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 gap-3 bg-white border border-[#E9EDF5] rounded-3xl min-h-[400px]">
+        <Loader2 className="h-10 w-10 text-[#4F3FF0] animate-spin" />
+        <p className="text-slate-500 font-bold text-sm tracking-wide">Retrieving student directories...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 font-sans">
-      
       {error && (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="bg-rose-500/10 border-rose-500/20 text-rose-600 rounded-2xl">
           <AlertCircle className="h-5 w-5 text-rose-500 mt-0.5 shrink-0" />
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription className="font-semibold text-sm">{error}</AlertDescription>
         </Alert>
       )}
 
       {/* Header Panel */}
-      <div className="border-b border-[#E9EDF5] pb-6 select-none">
-        <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2 font-heading">
-          <User className="h-7 w-7 text-[#4F3FF0]" />
-          Parent Monitoring Portal
-        </h1>
-        <p className="text-slate-500 text-sm mt-1">
-          Review your linked children's tuition statement, grades, and Career Scale logs in read-only mode.
-        </p>
+      <div className="border-b border-[#E9EDF5] pb-6 flex flex-wrap items-center justify-between gap-4 select-none text-left">
+        <div>
+          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2 font-heading">
+            <GraduationCap className="h-8 w-8 text-[#4F3FF0]" />
+            Parent Monitoring Dashboard
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Track linked children's assignments, course results, and Career Scale level progressions.
+          </p>
+        </div>
+
+        {/* Child Selector */}
+        {children.length > 0 && (
+          <div className="flex items-center gap-3 bg-white border border-[#E2E8F0] px-4 py-2.5 rounded-2xl shadow-sm">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Select Child:</span>
+            <select
+              value={selectedChild?.studentId || ''}
+              onChange={e => {
+                const child = children.find(c => c.studentId === e.target.value);
+                if (child) setSelectedChild(child);
+              }}
+              className="text-sm font-bold text-slate-700 outline-none bg-transparent cursor-pointer hover:text-[#4F3FF0] transition-colors"
+            >
+              {children.map(c => (
+                <option key={c.studentId} value={c.studentId}>
+                  {c.fullName}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 bg-white border border-[#E9EDF5] rounded-3xl">
-          <Loader2 className="h-8 w-8 text-[#4F3FF0] animate-spin" />
-          <p className="text-slate-500 font-medium text-sm">Loading children portfolios...</p>
+      {children.length === 0 ? (
+        <div className="bg-white border border-[#E9EDF5] rounded-3xl p-10 text-center space-y-4 max-w-lg mx-auto shadow-sm">
+          <User className="h-12 w-12 text-slate-300 mx-auto" />
+          <h3 className="text-lg font-bold text-slate-800">No Children Linked</h3>
+          <p className="text-sm text-slate-500 leading-relaxed">
+            Your parent profile currently does not have any linked student profiles. Please contact the administrative faculty to register your relationship link.
+          </p>
         </div>
       ) : (
-        <div className="space-y-8 animate-in fade-in duration-200">
-          {childrenList.map((child) => (
-            <div 
-              key={child.studentId}
-              className="p-6 border border-[#E9EDF5] bg-white rounded-3xl shadow-sm space-y-6"
-            >
-              {/* Profile details */}
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E9EDF5] pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 bg-indigo-50 border border-[#E2E8F0] text-[#4F3FF0] rounded-full flex items-center justify-center font-bold text-sm">
-                    {child.fullName.charAt(0)}
-                  </div>
-                  <div>
-                    <h3 className="text-base font-extrabold text-slate-800 leading-snug">{child.fullName}</h3>
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">STUDENT ID: {child.regNo}</span>
+        selectedChild && (
+          <div className="space-y-6">
+            {/* Child Summary Profile Card */}
+            <div className="bg-white border border-[#E9EDF5] rounded-3xl p-6 shadow-sm flex flex-wrap items-center justify-between gap-6 text-left">
+              <div className="flex items-center gap-4">
+                <div className="h-16 w-16 bg-indigo-50 border border-indigo-100 text-[#4F3FF0] rounded-2xl flex items-center justify-center font-black text-2xl font-heading shadow-inner">
+                  {selectedChild.fullName.charAt(0)}
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-slate-800 font-heading">{selectedChild.fullName}</h2>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-1 font-medium">
+                    <span className="flex items-center gap-1">
+                      <Bookmark className="h-3.5 w-3.5 text-slate-400" />
+                      Reg: {selectedChild.regNo}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Mail className="h-3.5 w-3.5 text-slate-400" />
+                      {selectedChild.email}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Layers className="h-3.5 w-3.5 text-slate-400" />
+                      Batch: <strong className="text-indigo-600 font-extrabold">{selectedChild.batchName}</strong>
+                    </span>
                   </div>
                 </div>
+              </div>
 
-                <div className="flex gap-2 text-[9px] font-extrabold tracking-wide uppercase select-none">
-                  <span className="px-2.5 py-0.5 border border-slate-200 bg-slate-50 text-slate-500 rounded-md">
-                    {child.status}
+              {/* Aggregated KPI Cards */}
+              <div className="flex gap-4">
+                {/* GPA standing */}
+                <div className="bg-[#F8FAFC] border border-[#E2E8F0] px-5 py-3 rounded-2xl text-center min-w-[110px]">
+                  <span className="text-[9px] font-black text-slate-450 uppercase tracking-wider block mb-0.5">Academic standing</span>
+                  <span className="text-xl font-black text-[#4F3FF0] block font-heading">{rollingGpa}</span>
+                </div>
+                {/* Career points */}
+                <div className="bg-[#F8FAFC] border border-[#E2E8F0] px-5 py-3 rounded-2xl text-center min-w-[110px]">
+                  <span className="text-[9px] font-black text-slate-450 uppercase tracking-wider block mb-0.5">Career Scale level</span>
+                  <span className="text-xl font-black text-amber-500 block font-heading">
+                    {careerScale ? `L${careerScale.levelIndex}` : 'L1'}
                   </span>
                 </div>
               </div>
+            </div>
 
-              {/* Grid data */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                
-                {/* Tuition Fee Balance */}
-                <div className="p-5 border border-[#E9EDF5] rounded-2xl space-y-3">
-                  <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-450 flex items-center gap-1.5 select-none">
-                    <DollarSign className="h-4.5 w-4.5 text-slate-400" />
-                    Tuition Fees Statement
-                  </h4>
-                  <div className="space-y-0.5">
-                    <span className="text-2xl font-black text-rose-600 block font-heading">
-                      Rs. {child.balance.toFixed(2)}
-                    </span>
-                    <span className="text-[8px] font-bold text-slate-400 uppercase block select-none">OUTSTANDING PAYMENTS DUE</span>
-                  </div>
-                </div>
+            {/* Dashboard Content & Tabs */}
+            <div className="space-y-6">
+              {/* Tab Bar */}
+              <div className="flex gap-2 border-b border-[#E9EDF5] pb-px">
 
-                {/* Academic standing */}
-                <div className="p-5 border border-[#E9EDF5] rounded-2xl space-y-3">
-                  <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-450 flex items-center gap-1.5 select-none">
-                    <BookOpen className="h-4.5 w-4.5 text-slate-400" />
-                    Academic Standing
-                  </h4>
-                  <div className="space-y-0.5">
-                    <span className="text-2xl font-black text-[#4F3FF0] block font-heading">
-                      85.3%
-                    </span>
-                    <span className="text-[8px] font-bold text-slate-400 uppercase block select-none">ROLLING GPA AVERAGE</span>
-                  </div>
-                </div>
-
-                {/* Career Scale */}
-                <div className="p-5 border border-[#E9EDF5] rounded-2xl space-y-3">
-                  <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-450 flex items-center gap-1.5 select-none">
-                    <Award className="h-4.5 w-4.5 text-slate-400" />
-                    Career scale progress
-                  </h4>
-                  <div className="space-y-0.5">
-                    <span className="text-2xl font-black text-amber-500 block font-heading">
-                      Level L3
-                    </span>
-                    <span className="text-[8px] font-bold text-slate-400 uppercase block select-none">{child.points} ACCUMULATED POINTS</span>
-                  </div>
-                </div>
-
+                <button
+                  onClick={() => setActiveTab('exams')}
+                  className={`pb-3 px-4 text-xs font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+                    activeTab === 'exams' 
+                      ? 'border-[#4F3FF0] text-[#4F3FF0]' 
+                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <FileText className="h-4 w-4" />
+                  Exams & Scores
+                </button>
+                <button
+                  onClick={() => setActiveTab('career')}
+                  className={`pb-3 px-4 text-xs font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+                    activeTab === 'career' 
+                      ? 'border-[#4F3FF0] text-[#4F3FF0]' 
+                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <Award className="h-4 w-4" />
+                  Career Scale
+                </button>
               </div>
 
+              {/* Tab Details */}
+              {loadingData ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-3 bg-white border border-[#E9EDF5] rounded-3xl min-h-[300px]">
+                  <Loader2 className="h-8 w-8 text-[#4F3FF0] animate-spin" />
+                  <p className="text-slate-500 font-semibold text-sm">Aggregating portfolio details...</p>
+                </div>
+              ) : (
+                <div className="animate-in fade-in duration-200">
+
+
+                  {/* --- EXAMS TAB --- */}
+                  {activeTab === 'exams' && (
+                    <div className="bg-white border border-[#E9EDF5] rounded-3xl overflow-hidden shadow-sm">
+                      {exams.length === 0 ? (
+                        <div className="py-20 text-center text-slate-400 text-sm">No exam attempts logged yet.</div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-[#F8FAFC] border-b border-[#E9EDF5] text-[10px] font-black uppercase tracking-wider text-slate-500 select-none">
+                                <th className="px-6 py-4">Course</th>
+                                <th className="px-6 py-4">Exam Details</th>
+                                <th className="px-6 py-4">Submitted Date</th>
+                                <th className="px-6 py-4">Attempt Status</th>
+                                <th className="px-6 py-4 text-right">Score achieved</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {exams.map(e => {
+                                const score = e.score;
+                                return (
+                                  <tr key={e.attemptId} className="hover:bg-slate-50/50 transition-colors">
+                                    <td className="px-6 py-4.5 font-bold text-slate-800 text-sm">
+                                      {e.courseName}
+                                    </td>
+                                    <td className="px-6 py-4.5 text-slate-650 text-sm font-semibold">
+                                      {e.examTitle}
+                                    </td>
+                                    <td className="px-6 py-4.5 text-xs text-slate-500 font-medium">
+                                      {formatDate(e.submittedAt)}
+                                    </td>
+                                    <td className="px-6 py-4.5">
+                                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-bold rounded-full select-none ${
+                                        e.status === 'SUBMITTED' || e.status === 'AUTO_SUBMITTED'
+                                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                          : 'bg-amber-50 text-amber-700 border border-amber-100'
+                                      }`}>
+                                        {e.status}
+                                      </span>
+                                    </td>
+                                    <td className="px-6 py-4.5 text-right">
+                                      {score !== null ? (
+                                        <span className="text-sm font-black text-[#4F3FF0] font-heading">
+                                          {score.toFixed(1)}%
+                                        </span>
+                                      ) : (
+                                        <span className="text-xs text-slate-400 font-bold select-none">--</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* --- CAREER SCALE TAB --- */}
+                  {activeTab === 'career' && careerScale && (
+                    <div className="space-y-6">
+                      {/* Progress Metrics Panel */}
+                      <div className="bg-white border border-[#E9EDF5] rounded-3xl p-6 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                        <div className="space-y-3">
+                          <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 select-none">Career scale progression standing</h4>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-black text-indigo-650 font-heading">
+                              {careerScale.levelName}
+                            </span>
+                            <span className="text-xs font-bold text-slate-400">
+                              (Index Level L{careerScale.levelIndex})
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 leading-relaxed font-sans">
+                            Industry readiness task milestones and level criteria. Students submit deliverables to reviewer faculty to score leveling criteria.
+                          </p>
+                        </div>
+
+                        {/* Points Slider */}
+                        <div className="space-y-3 flex flex-col justify-center">
+                          <div className="flex justify-between text-xs font-bold text-slate-600">
+                            <span>Points At Current Level: <strong className="text-indigo-600">{careerScale.points}</strong></span>
+                            <span>Level Target: {careerScale.pointsRequired} pts</span>
+                          </div>
+                          {/* Progress bar */}
+                          <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden border border-slate-200/50">
+                            <div 
+                              className="bg-gradient-to-r from-indigo-500 to-[#4F3FF0] h-full rounded-full transition-all duration-500" 
+                              style={{ width: `${Math.min(100, (careerScale.points / (careerScale.pointsRequired || 100)) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Submission History */}
+                      <div className="bg-white border border-[#E9EDF5] rounded-3xl overflow-hidden shadow-sm">
+                        <div className="bg-[#F8FAFC] border-b border-[#E9EDF5] px-6 py-4 flex items-center justify-between select-none">
+                          <h4 className="text-xs font-black uppercase tracking-wider text-slate-600">Read-Only Submission Log</h4>
+                        </div>
+                        {careerScale.submissions.length === 0 ? (
+                          <div className="py-20 text-center text-slate-400 text-sm">No task milestones submitted to reviewer list.</div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                              <thead>
+                                <tr className="bg-[#F8FAFC] border-b border-[#E9EDF5] text-[10px] font-black uppercase tracking-wider text-slate-500 select-none">
+                                  <th className="px-6 py-4">Task Milestone Title</th>
+                                  <th className="px-6 py-4">Submission Date</th>
+                                  <th className="px-6 py-4">Status</th>
+                                  <th className="px-6 py-4 text-right">Points awarded</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 font-sans">
+                                {careerScale.submissions.map(sub => {
+                                  const points = sub.pointsAwarded;
+                                  return (
+                                    <tr key={sub.submissionId} className="hover:bg-slate-50/50 transition-colors">
+                                      <td className="px-6 py-4.5 font-bold text-slate-800 text-sm">
+                                        {sub.taskTitle}
+                                      </td>
+                                      <td className="px-6 py-4.5 text-xs text-slate-500 font-medium">
+                                        {formatDate(sub.submittedAt)}
+                                      </td>
+                                      <td className="px-6 py-4.5">
+                                        <div className="space-y-1">
+                                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-bold rounded-full select-none ${
+                                            sub.status === 'APPROVED'
+                                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                              : sub.status === 'REJECTED'
+                                              ? 'bg-rose-50 text-rose-700 border border-rose-100'
+                                              : 'bg-amber-50 text-amber-700 border border-amber-100'
+                                          }`}>
+                                            {sub.status}
+                                          </span>
+                                          {sub.feedback && (
+                                            <span className="block text-[10px] text-slate-400 font-medium leading-relaxed italic" title={sub.feedback}>
+                                              "{sub.feedback}"
+                                            </span>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="px-6 py-4.5 text-right">
+                                        {points !== null ? (
+                                          <span className="text-sm font-black text-indigo-600 font-heading">
+                                            +{points} pts
+                                          </span>
+                                        ) : (
+                                          <span className="text-xs text-slate-400 font-bold select-none">--</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          ))}
-        </div>
+
+          </div>
+        )
       )}
 
     </div>

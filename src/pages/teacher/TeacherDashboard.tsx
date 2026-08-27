@@ -1,24 +1,57 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
-  FolderOpen, 
   FileQuestion, 
   Award,
-  ArrowRight
+  ArrowRight,
+  Loader2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { api } from '@/utils/api';
 
 export const TeacherDashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const stats = {
-    modulesCount: 2,
-    materialsCount: 1,
-    examsCount: 2,
+  const [stats, setStats] = useState({
+    modulesCount: 0,
+    materialsCount: 0,
+    examsCount: 0,
     gradesPending: 0
-  };
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        const data = await api.get<any>('/api/v1/teachers/dashboard/stats');
+        if (data) {
+          setStats({
+            modulesCount: data.modulesCount || 0,
+            materialsCount: data.materialsCount || 0,
+            examsCount: data.examsCount || 0,
+            gradesPending: data.gradesPending || 0
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching teacher stats:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStats();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 gap-3 bg-white border border-[#E9EDF5] rounded-3xl min-h-[400px]">
+        <Loader2 className="h-10 w-10 text-[#4F3FF0] animate-spin" />
+        <p className="text-slate-500 font-bold text-sm tracking-wide">Retrieving teacher dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 font-sans select-none">
@@ -37,7 +70,7 @@ export const TeacherDashboard: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         <div className="bg-white border border-[#E9EDF5] p-5 rounded-2xl shadow-sm flex items-center justify-between gap-4">
           <div className="space-y-1.5">
             <span className="text-[10px] font-extrabold text-slate-400 tracking-wider uppercase block">ASSIGNED COURSES</span>
@@ -49,16 +82,6 @@ export const TeacherDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white border border-[#E9EDF5] p-5 rounded-2xl shadow-sm flex items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <span className="text-[10px] font-extrabold text-slate-400 tracking-wider uppercase block">UPLOADED MATERIALS</span>
-            <span className="text-2xl font-black text-slate-800 leading-none block font-heading">{stats.materialsCount}</span>
-            <span className="text-[10px] font-semibold text-slate-400 block">Available to batches</span>
-          </div>
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl shrink-0">
-            <FolderOpen className="h-5 w-5" />
-          </div>
-        </div>
 
         <div className="bg-white border border-[#E9EDF5] p-5 rounded-2xl shadow-sm flex items-center justify-between gap-4">
           <div className="space-y-1.5">
@@ -84,21 +107,9 @@ export const TeacherDashboard: React.FC = () => {
       </div>
 
       {/* Quick Navigation Panels */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        <div className="bg-white border border-[#E9EDF5] p-6 rounded-2xl shadow-sm space-y-4">
-          <h3 className="text-sm font-extrabold text-slate-800 font-heading">Course Materials</h3>
-          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
-            Upload course materials, slide decks, assignments briefs, and worksheets for your batches.
-          </p>
-          <button
-            onClick={() => navigate('/teacher/materials')}
-            className="text-xs font-bold text-[#4F3FF0] hover:text-[#4335D6] inline-flex items-center gap-1 cursor-pointer"
-          >
-            Manage Materials
-            <ArrowRight className="h-4.5 w-4.5" />
-          </button>
-        </div>
+
 
         <div className="bg-white border border-[#E9EDF5] p-6 rounded-2xl shadow-sm space-y-4">
           <h3 className="text-sm font-extrabold text-slate-800 font-heading">Question Bank & Exams</h3>

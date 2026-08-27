@@ -4,30 +4,34 @@ import {
   AlertCircle, 
   Plus, 
   Trash2, 
+  Edit,
   Award,
-  BookOpen,
-  FileText,
-  Image as ImageIcon,
-  Link as LinkIcon,
   HelpCircle,
   ToggleLeft,
   ToggleRight,
-  Layers
+  TrendingUp,
+  Users
 } from 'lucide-react';
 import Button from '@/components/common/Button';
 import TextField from '@/components/common/TextField';
-import { careerTaskService, type CareerTaskData, type CareerLevelBatchAccessData } from '@/services/careerTaskService';
+import { careerTaskService, type CareerTaskData } from '@/services/careerTaskService';
 import { pointsLevelService, type CareerLevelData } from '@/services/pointsLevelService';
 import { batchService } from '@/services/batchService';
+import { careerMarkingService, type CareerStatsData } from '@/services/careerMarkingService';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/utils/toast';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 
 export const CareerTasks: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
   // --- States ---
   const [tasks, setTasks] = useState<CareerTaskData[]>([]);
   const [levels, setLevels] = useState<CareerLevelData[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
-  const [batchAccess, setBatchAccess] = useState<CareerLevelBatchAccessData[]>([]);
+  const [stats, setStats] = useState<CareerStatsData | null>(null);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +41,7 @@ export const CareerTasks: React.FC = () => {
 
   // --- Modals State ---
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // --- Confirmation Modal State ---
@@ -51,12 +56,18 @@ export const CareerTasks: React.FC = () => {
   });
 
   // --- Form States ---
-  const [taskForm, setTaskForm] = useState({
+  const [taskForm, setTaskForm] = useState<{
+    title: string;
+    description: string;
+    levelId: string;
+    pointsValue: string;
+    batchIds: string[];
+  }>({
     title: '',
     description: '',
     levelId: '',
     pointsValue: '50',
-    submissionType: 'LINK' // LINK, IMAGE, PDF, FILE
+    batchIds: []
   });
 
   // --- Fetch API Data ---
@@ -65,20 +76,20 @@ export const CareerTasks: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const [levelsData, tasksData, batchesData, accessData] = await Promise.all([
+      const [levelsData, tasksData, batchesData, statsData] = await Promise.all([
         pointsLevelService.getLevels(),
         careerTaskService.getTasks(),
         batchService.getBatches(),
-        careerTaskService.getBatchAccess()
+        careerMarkingService.getStats().catch(() => null)
       ]);
 
       setLevels(levelsData || []);
       setTasks(tasksData || []);
       setBatches(batchesData || []);
-      setBatchAccess(accessData || []);
+      setStats(statsData);
 
       // Pre-select first level in create form if available
-      if (levelsData && levelsData.length > 0) {
+      if (levelsData && levelsData.length > 0 && !taskForm.levelId) {
         setTaskForm(prev => ({
           ...prev,
           levelId: levelsData[0].id || ''
@@ -97,7 +108,31 @@ export const CareerTasks: React.FC = () => {
   }, []);
 
   // --- Handlers ---
-  const handleCreateSubmit = async (e: React.FormEvent) => {
+  const handleOpenCreateModal = () => {
+    setEditingTaskId(null);
+    setTaskForm({
+      title: '',
+      description: '',
+      levelId: levels[0]?.id || '',
+      pointsValue: '50',
+      batchIds: []
+    });
+    setShowCreateModal(true);
+  };
+
+  const handleOpenEditModal = (task: CareerTaskData) => {
+    setEditingTaskId(task.id || null);
+    setTaskForm({
+      title: task.title,
+      description: task.description,
+      levelId: task.levelId,
+      pointsValue: String(task.pointsValue),
+      batchIds: task.batchIds || []
+    });
+    setShowCreateModal(true);
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!taskForm.title.trim() || !taskForm.description.trim() || !taskForm.levelId) {
       alert('Please fill out all required fields.');
@@ -111,25 +146,24 @@ export const CareerTasks: React.FC = () => {
         description: taskForm.description,
         levelId: taskForm.levelId,
         pointsValue: Number(taskForm.pointsValue) || 50,
-        submissionType: taskForm.submissionType,
-        isActive: true
+        batchIds: taskForm.batchIds,
+        isActive: true,
+        createdBy: user?.userId || 'usr0001'
       };
 
-      await careerTaskService.createTask(payload);
+      if (editingTaskId) {
+        await careerTaskService.updateTask(editingTaskId, payload);
+        toast.success('Career Task updated successfully!');
+      } else {
+        await careerTaskService.createTask(payload);
+        toast.success('Career Task created successfully!');
+      }
       
       setShowCreateModal(false);
-      setTaskForm(prev => ({
-        ...prev,
-        title: '',
-        description: '',
-        pointsValue: '50',
-        submissionType: 'LINK'
-      }));
-      toast.success('Career Task created successfully!');
       fetchData();
     } catch (err: any) {
       console.error(err);
-      alert(err.message || 'Failed to create task.');
+      alert(err.message || 'Failed to save task.');
     } finally {
       setSubmitting(false);
     }
@@ -168,52 +202,11 @@ export const CareerTasks: React.FC = () => {
       setTasks(prev => prev.filter(t => t.id !== taskId));
       setConfirmModal({ show: false, taskId: '', taskTitle: '' });
       toast.success('Career Task deleted successfully.');
+      fetchData();
     } catch (err: any) {
       console.error(err);
       alert(err.message || 'Failed to delete task.');
     }
-  };
-
-  // Toggle Batch Access Handler
-  const handleToggleAccess = async (levelId: string, batchId: string) => {
-    try {
-      // Optimistic UI update
-      setBatchAccess(prev => {
-        const copy = [...prev];
-        const index = copy.findIndex(a => a.level.id === levelId && a.batch.batchId === batchId);
-        if (index > -1) {
-          copy[index] = { ...copy[index], isOpen: !copy[index].isOpen };
-        } else {
-          // Add temporary mapping
-          copy.push({
-            id: 'temp',
-            level: { id: levelId, levelNumber: 0, title: '' },
-            batch: { batchId, batchName: '' },
-            isOpen: true,
-            openedAt: new Date().toISOString()
-          });
-        }
-        return copy;
-      });
-
-      await careerTaskService.toggleBatchAccess(levelId, batchId);
-      toast.success('Batch access setting updated.');
-      
-      // Fetch latest access mappings from server
-      const updatedAccess = await careerTaskService.getBatchAccess();
-      setBatchAccess(updatedAccess || []);
-    } catch (err: any) {
-      console.error(err);
-      toast.error('Failed to toggle batch level access.');
-      // Revert mapping
-      fetchData();
-    }
-  };
-
-  // Check if access is open
-  const isLevelOpenForBatch = (levelId: string, batchId: string): boolean => {
-    const access = batchAccess.find(a => a.level.id === levelId && a.batch.batchId === batchId);
-    return access ? access.isOpen : false;
   };
 
   // --- Filtered tasks ---
@@ -223,14 +216,12 @@ export const CareerTasks: React.FC = () => {
     });
   }, [tasks, selectedLevelFilter]);
 
-  // --- Icon mapping for submission type ---
-  const getSubmissionIcon = (type: string) => {
-    switch (type.toUpperCase()) {
-      case 'LINK': return <LinkIcon className="h-4 w-4 text-sky-500" />;
-      case 'IMAGE': return <ImageIcon className="h-4 w-4 text-emerald-500" />;
-      case 'PDF': return <FileText className="h-4 w-4 text-rose-500" />;
-      default: return <BookOpen className="h-4 w-4 text-slate-500" />;
-    }
+  // Map batch IDs to names
+  const getBatchNames = (batchIds?: string[]): string => {
+    if (!batchIds || batchIds.length === 0) return 'No Batches Assigned';
+    return batchIds
+      .map(id => batches.find(b => b.batchId === id)?.batchName || id)
+      .join(', ');
   };
 
   return (
@@ -250,10 +241,42 @@ export const CareerTasks: React.FC = () => {
             Career Tasks Configuration
           </h1>
           <p className="text-slate-500 text-xs mt-1 font-semibold">
-            Define practical deliverables students must submit to meet career level progression criteria.
+            Define practical real-world tasks and track student career scale level progression.
           </p>
         </div>
       </div>
+
+      {/* Career Scale Insights Statistics */}
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-gradient-to-br from-[#4F3FF0] to-[#3D2ED0] text-white rounded-3xl p-6 shadow-md flex flex-col justify-between min-h-[140px]">
+            <div className="flex justify-between items-start">
+              <span className="text-[10px] font-black tracking-wider uppercase opacity-80">Industry Ready Standing</span>
+              <TrendingUp className="h-5 w-5 opacity-80" />
+            </div>
+            <div>
+              <span className="text-3xl font-black">{stats.industryReadyCount}</span>
+              <span className="block text-[11px] font-semibold opacity-80 mt-1">Students reached top career level</span>
+            </div>
+          </div>
+
+          <div className="bg-white border border-[#E9EDF5] rounded-3xl p-6 shadow-sm col-span-2 space-y-3">
+            <div className="flex items-center gap-2">
+              <Users className="h-4.5 w-4.5 text-[#4F3FF0]" />
+              <span className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">Students Per Level Distribution</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1">
+              {stats.levelStats.map(lvl => (
+                <div key={lvl.levelId} className="bg-slate-50 border border-slate-100 p-3 rounded-2xl text-center space-y-1">
+                  <span className="text-[9px] font-black text-[#4F3FF0] uppercase block">Level {lvl.levelNumber}</span>
+                  <span className="text-lg font-black text-slate-855 block">{lvl.studentCount}</span>
+                  <span className="text-[9px] font-bold text-slate-400 block truncate" title={lvl.title}>{lvl.title}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filter by level bar */}
       <div className="bg-white border border-[#E9EDF5] rounded-2xl p-4 shadow-sm flex items-center justify-between gap-4 select-none">
@@ -274,7 +297,7 @@ export const CareerTasks: React.FC = () => {
           <Button 
             variant="solid" 
             color="primary" 
-            onClick={() => setShowCreateModal(true)}
+            onClick={handleOpenCreateModal}
             startIcon={<Plus className="h-4 w-4" />}
           >
             Add New Task
@@ -286,7 +309,7 @@ export const CareerTasks: React.FC = () => {
       <div className="bg-white border border-[#E9EDF5] rounded-3xl p-6 shadow-sm space-y-4">
         <div>
           <h3 className="font-extrabold text-slate-800 text-sm font-heading">Defined Career Tasks</h3>
-          <p className="text-slate-450 text-[10px] font-semibold mt-0.5">List of actionable tasks and expectations per career stage.</p>
+          <p className="text-slate-450 text-[10px] font-semibold mt-0.5">List of actionable tasks. Click any task row or marking action to grade students.</p>
         </div>
 
         {loading ? (
@@ -304,10 +327,10 @@ export const CareerTasks: React.FC = () => {
             <table className="w-full border-collapse text-left">
               <thead>
                 <tr className="bg-[#F8FAFC]/50 border-b border-[#E9EDF5] text-slate-455 text-[10px] font-bold tracking-wider uppercase">
-                  <th className="px-6 py-4 w-1/2">Task Details</th>
+                  <th className="px-6 py-4 w-1/3">Task Details</th>
                   <th className="px-6 py-4">Target Level</th>
                   <th className="px-6 py-4">Points</th>
-                  <th className="px-6 py-4">Type</th>
+                  <th className="px-6 py-4">Assigned Batches</th>
                   <th className="px-6 py-4 text-center">Status</th>
                   <th className="px-6 py-4 text-center">Action</th>
                 </tr>
@@ -327,13 +350,10 @@ export const CareerTasks: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-amber-600 font-black text-xs">
-                      +{t.pointsValue} PTS
+                      {t.pointsValue} PTS
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-1.5 font-bold uppercase text-[9px] text-slate-600 select-none">
-                        {getSubmissionIcon(t.submissionType)}
-                        <span>{t.submissionType}</span>
-                      </div>
+                    <td className="px-6 py-4 text-slate-500 font-bold text-[10px]">
+                      {getBatchNames(t.batchIds)}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <button
@@ -348,13 +368,27 @@ export const CareerTasks: React.FC = () => {
                         )}
                       </button>
                     </td>
-                    <td className="px-6 py-4 text-center select-none">
+                    <td className="px-6 py-4 text-center select-none space-x-1">
+                      <button
+                        onClick={() => navigate(`/admin/reviewer-workflow?taskId=${t.id}`)}
+                        className="px-2.5 py-1.5 bg-[#4F3FF0]/10 hover:bg-[#4F3FF0] text-[#4F3FF0] hover:text-white text-[10px] font-black rounded-lg transition-all cursor-pointer"
+                        title="Mark Students"
+                      >
+                        Mark
+                      </button>
+                      <button 
+                        onClick={() => handleOpenEditModal(t)}
+                        className="p-1.5 hover:bg-indigo-50 text-slate-400 hover:text-[#4F3FF0] rounded-lg transition-colors cursor-pointer inline-flex items-center"
+                        title="Edit Task"
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                      </button>
                       <button 
                         onClick={() => triggerDeleteConfirm(t.id!, t.title)}
-                        className="p-2 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition-colors cursor-pointer"
+                        className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer inline-flex items-center"
                         title="Delete Task"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </td>
                   </tr>
@@ -365,82 +399,16 @@ export const CareerTasks: React.FC = () => {
         )}
       </div>
 
-      {/* Level Batch Access Control Matrix Panel */}
-      <div className="bg-white border border-[#E9EDF5] rounded-3xl p-6 shadow-sm space-y-4">
-        <div>
-          <h3 className="font-extrabold text-slate-800 text-sm font-heading flex items-center gap-1.5">
-            <Layers className="h-4.5 w-4.5 text-[#4F3FF0]" /> Open Level for Batch
-          </h3>
-          <p className="text-slate-450 text-[10px] font-semibold mt-0.5">
-            Toggle level visibility and tasks access for specific class batches.
-          </p>
-        </div>
-
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-10">
-            <Loader2 className="h-6 w-6 text-[#4F3FF0] animate-spin" />
-          </div>
-        ) : levels.length === 0 || batches.length === 0 ? (
-          <div className="text-center py-10 text-slate-400 font-bold">
-            Define both levels and batches to configure access.
-          </div>
-        ) : (
-          <div className="overflow-x-auto border border-[#E9EDF5] rounded-2xl">
-            <table className="w-full border-collapse text-left text-xs font-semibold text-slate-700">
-              <thead>
-                <tr className="bg-[#F8FAFC]/50 border-b border-[#E9EDF5] text-slate-455 text-[10px] font-bold tracking-wider uppercase select-none">
-                  <th className="px-6 py-4 w-1/4">Batch / Intake</th>
-                  {levels.map(lvl => (
-                    <th key={lvl.id} className="px-6 py-4 text-center">L{lvl.levelNumber}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E9EDF5]">
-                {batches.map(batch => (
-                  <tr key={batch.batchId} className="hover:bg-slate-50/20">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-[#4F3FF0]" />
-                        <span className="font-extrabold text-slate-850">{batch.batchName}</span>
-                      </div>
-                    </td>
-                    {levels.map(lvl => {
-                      const isOpen = isLevelOpenForBatch(lvl.id!, batch.batchId);
-                      return (
-                        <td key={lvl.id} className="px-6 py-4 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleAccess(lvl.id!, batch.batchId)}
-                            className="p-1 rounded-lg transition-all cursor-pointer inline-flex items-center justify-center"
-                            title={`Toggle L${lvl.levelNumber} for ${batch.batchName}`}
-                          >
-                            {isOpen ? (
-                              <ToggleRight className="h-6 w-6 text-emerald-500" />
-                            ) : (
-                              <ToggleLeft className="h-6 w-6 text-slate-450" />
-                            )}
-                          </button>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* --- CREATE TASK MODAL --- */}
+      {/* --- CREATE / EDIT TASK MODAL --- */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
           <div className="bg-white border border-[#E9EDF5] rounded-3xl p-6 w-full max-w-lg shadow-2xl relative text-left">
             <h3 className="text-base font-black text-slate-800 mb-4 flex items-center gap-2 select-none">
               <Award className="h-5 w-5 text-[#4F3FF0]" />
-              Create New Career Task
+              {editingTaskId ? 'Edit Career Task' : 'Create New Career Task'}
             </h3>
             
-            <form onSubmit={handleCreateSubmit} className="space-y-4 font-sans">
+            <form onSubmit={handleFormSubmit} className="space-y-4 font-sans">
               <TextField
                 label="Task Title *"
                 value={taskForm.title}
@@ -454,8 +422,8 @@ export const CareerTasks: React.FC = () => {
                 <textarea
                   value={taskForm.description}
                   onChange={e => setTaskForm(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Summarize the core task objective and guidelines..."
-                  className="w-full pl-4 pr-4 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-xs text-slate-800 placeholder-slate-450 outline-none focus:bg-white focus:ring-4 focus:ring-[#4F3FF0]/10 min-h-[70px] transition-all"
+                  placeholder="Summarize the core task objective and expectations..."
+                  className="w-full pl-4 pr-4 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-xs text-slate-800 placeholder-slate-455 outline-none focus:bg-white focus:ring-4 focus:ring-[#4F3FF0]/10 min-h-[70px] transition-all"
                   required
                 />
               </div>
@@ -477,29 +445,42 @@ export const CareerTasks: React.FC = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-extrabold tracking-wider uppercase text-slate-500 select-none">Submission Type *</label>
-                  <select
-                    value={taskForm.submissionType}
-                    onChange={e => setTaskForm(prev => ({ ...prev, submissionType: e.target.value }))}
-                    className="w-full pl-3 pr-8 py-2 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-xs text-slate-800 font-bold outline-none focus:bg-white cursor-pointer"
+                  <TextField
+                    label="Reward Points *"
+                    type="number"
+                    value={taskForm.pointsValue}
+                    onChange={e => setTaskForm(prev => ({ ...prev, pointsValue: e.target.value }))}
                     required
-                  >
-                    <option value="LINK">LINK (URL)</option>
-                    <option value="IMAGE">IMAGE (PNG/JPG)</option>
-                    <option value="PDF">PDF DOCUMENT</option>
-                    <option value="FILE">ZIP/SOURCE FILE</option>
-                  </select>
+                  />
                 </div>
               </div>
 
-              <div className="w-1/2">
-                <TextField
-                  label="Reward Points *"
-                  type="number"
-                  value={taskForm.pointsValue}
-                  onChange={e => setTaskForm(prev => ({ ...prev, pointsValue: e.target.value }))}
-                  required
-                />
+              {/* Batch multi-select checklist */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-extrabold tracking-wider uppercase text-slate-550 select-none">Assigned Batches *</label>
+                <div className="grid grid-cols-2 gap-2 bg-[#F8FAFC] border border-[#E2E8F0] p-3 rounded-xl max-h-[120px] overflow-y-auto">
+                  {batches.map(b => {
+                    const checked = taskForm.batchIds.includes(b.batchId);
+                    return (
+                      <label key={b.batchId} className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            setTaskForm(prev => {
+                              const batchIds = checked
+                                ? prev.batchIds.filter(id => id !== b.batchId)
+                                : [...prev.batchIds, b.batchId];
+                              return { ...prev, batchIds };
+                            });
+                          }}
+                          className="rounded border-slate-300 text-[#4F3FF0] focus:ring-[#4F3FF0] cursor-pointer"
+                        />
+                        <span>{b.batchName}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 font-sans">
@@ -507,7 +488,7 @@ export const CareerTasks: React.FC = () => {
                   Cancel
                 </Button>
                 <Button type="submit" variant="solid" color="primary" isLoading={submitting}>
-                  Create Task
+                  {editingTaskId ? 'Save Changes' : 'Create Task'}
                 </Button>
               </div>
             </form>

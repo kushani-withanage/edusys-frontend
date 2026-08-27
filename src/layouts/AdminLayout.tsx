@@ -4,16 +4,16 @@ import {
   LayoutDashboard, 
   Users, 
   BookOpen, 
-  ClipboardList, 
-  CreditCard, 
   FileQuestion, 
-  FolderOpen, 
   Award, 
   CheckSquare, 
   UserCheck, 
   Trophy, 
   BarChart3,
-  Shield
+  Shield,
+  Layers,
+  Calendar,
+  Key
 } from 'lucide-react';
 
 const adminSidebarGroups: SidebarGroup[] = [
@@ -27,27 +27,21 @@ const adminSidebarGroups: SidebarGroup[] = [
     category: 'Administration',
     links: [
       { label: 'Users & Roles', path: '/admin/users-roles', icon: Users },
-      { 
-        label: 'Courses & Calendars', 
-        path: '/admin/courses-calendars', 
-        icon: BookOpen,
-        subLinks: [
-          { label: 'Course Registry', path: '/admin/courses-calendars?tab=courses' },
-          { label: 'Batches Planner', path: '/admin/courses-calendars?tab=batches' },
-          { label: 'Academic Calendar', path: '/admin/courses-calendars?tab=calendar' },
-          { label: 'Admissions Inquiries', path: '/admin/courses-calendars?tab=admissions' },
-          { label: 'Course Access', path: '/admin/courses-calendars?tab=access' }
-        ]
-      },
-      { label: 'Admissions', path: '/admin/admissions', icon: ClipboardList },
-      { label: 'Fee Management', path: '/admin/fee-management', icon: CreditCard },
+    ]
+  },
+  {
+    category: 'Courses & Calendars',
+    links: [
+      { label: 'Course Registry', path: '/admin/courses-calendars?tab=courses', icon: BookOpen },
+      { label: 'Batches Planner', path: '/admin/courses-calendars?tab=batches', icon: Layers },
+      { label: 'Academic Calendar', path: '/admin/courses-calendars?tab=calendar', icon: Calendar },
+      { label: 'Course Access', path: '/admin/courses-calendars?tab=access', icon: Key },
     ]
   },
   {
     category: 'Academic Process',
     links: [
       { label: 'Question Bank & Exams', path: '/admin/exams', icon: FileQuestion },
-      { label: 'Materials & Assignments', path: '/admin/materials', icon: FolderOpen },
       { label: 'Academic Results', path: '/admin/results', icon: Award },
     ]
   },

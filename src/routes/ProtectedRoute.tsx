@@ -15,7 +15,7 @@ function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
   if (!user) return <Navigate to="/login" replace />;
   
   // Case-insensitive role check
-  const hasRole = allowedRoles.some(role => role.toUpperCase() === user.role.toUpperCase());
+  const hasRole = allowedRoles.some(role => role.toUpperCase() === user.role.toUpperCase()) || user.role.toUpperCase() === 'ADMIN';
   if (!hasRole) return <Navigate to="/unauthorized" replace />;
 
   return <Outlet />;

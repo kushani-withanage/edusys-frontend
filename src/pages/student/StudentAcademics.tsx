@@ -2,17 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   BookOpen, 
-  Download,
   Play,
   AlertTriangle
 } from 'lucide-react';
 import { examService } from '@/services/examService';
-import { materialService } from '@/services/materialService';
 import { api } from '@/utils/api';
 
 export const StudentAcademics: React.FC = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'courses' | 'exams' | 'materials'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'exams'>('courses');
   const [myCourses, setMyCourses] = useState<any[]>([]);
   const [confirmStartExam, setConfirmStartExam] = useState<any | null>(null);
 
@@ -23,7 +21,6 @@ export const StudentAcademics: React.FC = () => {
   }, []);
 
   // Data states
-  const [materials, setMaterials] = useState<any[]>([]);
   const [exams, setExams] = useState<any[]>([]);
 
 
@@ -33,16 +30,10 @@ export const StudentAcademics: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [materialsData, examsData] = await Promise.all([
-          materialService.getMaterials().catch(() => []),
-          examService.getAvailableStudentExams().catch(() => [])
-        ]);
-
-        setMaterials(materialsData);
+        const examsData = await examService.getAvailableStudentExams().catch(() => []);
         setExams(examsData);
       } catch (err) {
         console.error('Error fetching course assets:', err);
-        setMaterials([]);
         setExams([]);
       }
     };
@@ -50,13 +41,7 @@ export const StudentAcademics: React.FC = () => {
   }, []);
 
 
-  const handleDownloadMaterial = (title: string) => {
-    if (title.startsWith('mat-')) {
-      alert('Simulated resource has no backing static file.');
-    } else {
-      window.open(`http://localhost:8080/uploads/${title}`, '_blank');
-    }
-  };
+
 
 
 
@@ -97,16 +82,6 @@ export const StudentAcademics: React.FC = () => {
           }`}
         >
           Exams & Assessments
-        </button>
-        <button
-          onClick={() => setActiveTab('materials')}
-          className={`px-4 py-2 rounded-xl transition-all cursor-pointer ${
-            activeTab === 'materials'
-              ? 'bg-white border border-[#E2E8F0] text-slate-800 shadow-sm font-extrabold'
-              : 'text-slate-450 hover:text-slate-700'
-          }`}
-        >
-          Course Materials
         </button>
       </div>
 
@@ -258,43 +233,7 @@ export const StudentAcademics: React.FC = () => {
           </div>
         )}
 
-        {/* COURSE MATERIALS TAB */}
-        {activeTab === 'materials' && (
-          <div className="bg-white border border-[#E9EDF5] rounded-3xl p-6 shadow-sm space-y-4 animate-in fade-in duration-200">
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-450 select-none">
-              Syllabus & Learning Materials
-            </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-              {materials.map(mat => (
-                <div 
-                  key={mat.id}
-                  className="p-5 border border-[#E9EDF5] rounded-2xl flex items-center justify-between gap-4 hover:border-slate-350 transition-all select-none"
-                >
-                  <div className="space-y-1.5 truncate">
-                    <span className="inline-flex px-1.5 py-0.5 bg-rose-50 text-rose-600 border border-rose-100 rounded text-[8px] font-extrabold uppercase leading-none">
-                      {mat.type || 'PDF'}
-                    </span>
-                    <h4 className="font-extrabold text-slate-800 text-xs truncate" title={mat.title}>{mat.title.replace(/^\d+_/, '')}</h4>
-                    <span className="text-[8px] font-bold text-slate-400 block tracking-wide uppercase leading-none mt-1">BATCH CODE: {mat.batchCode}</span>
-                  </div>
-                  <button
-                    onClick={() => handleDownloadMaterial(mat.title)}
-                    className="p-2.5 hover:bg-slate-100 text-slate-600 rounded-xl cursor-pointer"
-                  >
-                    <Download className="h-4.5 w-4.5" />
-                  </button>
-                </div>
-              ))}
-
-              {materials.length === 0 && (
-                <div className="col-span-full text-center py-10 text-slate-450 text-xs font-semibold select-none bg-[#F8FAFC] border border-slate-200/50 rounded-2xl">
-                  No learning materials or worksheets found.
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
       </div>
 

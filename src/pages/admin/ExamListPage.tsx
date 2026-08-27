@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 import { 
   Plus, 
   Calendar, 
@@ -18,7 +19,9 @@ import { api } from '@/utils/api';
 import { toast } from '@/utils/toast';
 
 export const ExamListPage: React.FC = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const pathPrefix = user?.role?.toUpperCase() === 'TEACHER' ? '/teacher' : '/admin';
   const [exams, setExams] = useState<any[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -132,13 +135,13 @@ export const ExamListPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <Link
-            to="/admin/exams/questions"
+            to={`${pathPrefix}/exams/questions`}
             className="px-4 py-2 text-[10.5px] font-black rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-655 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
           >
             📂 Open Question Bank
           </Link>
           <Link
-            to="/admin/exams/new"
+            to={`${pathPrefix}/exams/new`}
             className="px-4 py-2 text-[10.5px] font-black rounded-xl bg-[#4F3FF0] hover:bg-[#3D2ED0] text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-sm shadow-[#4F3FF0]/10"
           >
             <Plus className="h-3.5 w-3.5" /> Create Exam
@@ -223,7 +226,7 @@ export const ExamListPage: React.FC = () => {
                         <Play className="h-3.5 w-3.5" /> Publish
                       </button>
                       <button
-                        onClick={() => navigate(`/admin/exams/edit/${exam.id}`)}
+                        onClick={() => navigate(`${pathPrefix}/exams/edit/${exam.id}`)}
                         className="flex-1 md:w-32 px-3.5 py-2 border border-slate-200 hover:border-slate-350 bg-white text-slate-600 text-[10px] font-black rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
                       >
                         <Edit className="h-3.5 w-3.5" /> Edit Builder
@@ -246,7 +249,7 @@ export const ExamListPage: React.FC = () => {
                         <XSquare className="h-3.5 w-3.5" /> Close Exam
                       </button>
                       <button
-                        onClick={() => navigate(`/admin/exams/${exam.id}/analytics`)}
+                        onClick={() => navigate(`${pathPrefix}/exams/${exam.id}/analytics`)}
                         className="flex-1 md:w-32 px-3.5 py-2 border border-slate-200 hover:border-[#4F3FF0] hover:text-[#4F3FF0] bg-white text-slate-600 text-[10px] font-black rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
                       >
                         <BarChart2 className="h-3.5 w-3.5" /> View Analytics
@@ -256,7 +259,7 @@ export const ExamListPage: React.FC = () => {
 
                   {exam.status === 'CLOSED' && (
                     <button
-                      onClick={() => navigate(`/admin/exams/${exam.id}/analytics`)}
+                      onClick={() => navigate(`${pathPrefix}/exams/${exam.id}/analytics`)}
                       className="flex-1 md:w-32 px-3.5 py-2 bg-[#4F3FF0] hover:bg-[#3D2ED0] text-white text-[10px] font-black rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
                     >
                       <BarChart2 className="h-3.5 w-3.5" /> View Results

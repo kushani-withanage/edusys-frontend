@@ -2,10 +2,10 @@ import React from 'react';
 import MainLayout, { type SidebarGroup } from './MainLayout';
 import { 
   LayoutDashboard, 
-  FolderOpen, 
   FileQuestion, 
   Award,
-  Shield
+  Shield,
+  BookOpen
 } from 'lucide-react';
 
 const teacherSidebarGroups: SidebarGroup[] = [
@@ -18,7 +18,7 @@ const teacherSidebarGroups: SidebarGroup[] = [
   {
     category: 'Academic Process',
     links: [
-      { label: 'Materials & Assignments', path: '/teacher/materials', icon: FolderOpen },
+      { label: 'My Assigned Modules', path: '/teacher/courses', icon: BookOpen },
       { label: 'Question Bank & Exams', path: '/teacher/exams', icon: FileQuestion },
       { label: 'Academic Results', path: '/teacher/results', icon: Award },
     ]

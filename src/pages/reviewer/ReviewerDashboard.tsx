@@ -1,21 +1,54 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   UserCheck, 
   Trophy, 
-  ArrowRight 
+  ArrowRight,
+  Loader2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { api } from '@/utils/api';
 
 export const ReviewerDashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const stats = {
-    pendingReviews: 2,
-    reviewedCount: 1,
+  const [stats, setStats] = useState({
+    pendingReviews: 0,
+    reviewedCount: 0,
     overridesApplied: 0
-  };
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        const data = await api.get<any>('/api/v1/reviewers/dashboard/stats');
+        if (data) {
+          setStats({
+            pendingReviews: data.pendingReviews || 0,
+            reviewedCount: data.reviewedCount || 0,
+            overridesApplied: data.overridesApplied || 0
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching reviewer stats:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStats();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 gap-3 bg-white border border-[#E9EDF5] rounded-3xl min-h-[400px]">
+        <Loader2 className="h-10 w-10 text-[#4F3FF0] animate-spin" />
+        <p className="text-slate-500 font-bold text-sm tracking-wide">Retrieving reviewer dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 font-sans select-none">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Lock, 
@@ -7,12 +7,21 @@ import {
   BookOpen,
   FileText,
   Activity,
-  X
+  X,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { api } from '@/utils/api';
+import { toast } from '@/utils/toast';
 
 export const StudentSettings: React.FC = () => {
   const { user } = useAuth();
+
+  // Profile data state
+  const [profile, setProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Password modal state
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -23,31 +32,61 @@ export const StudentSettings: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
 
+  // Enrolled courses state
+  const [myCourses, setMyCourses] = useState<any[]>([]);
+
+  const fetchProfile = async () => {
+    if (!user?.userId) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const [profileData, coursesData] = await Promise.all([
+        api.get<any>(`/api/v1/students/${user.userId}`),
+        api.get<any[]>('/api/v1/courses/my-courses').catch(() => [])
+      ]);
+      setProfile(profileData);
+      setMyCourses(coursesData || []);
+    } catch (err: any) {
+      console.error('Failed to fetch student settings profile:', err);
+      setError('Could not load your student profile settings.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProfile();
+  }, [user]);
+
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
-      alert('New passwords do not match!');
+      toast.error('New passwords do not match!');
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error('New password must be at least 6 characters long.');
       return;
     }
     
     try {
       setSavingPassword(true);
-      alert('Password reset completed successfully!');
+      await api.put('/api/v1/users/change-password', {
+        currentPassword: oldPassword,
+        newPassword: newPassword
+      });
+      toast.success('Password reset completed successfully!');
       setOldPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setIsPasswordModalOpen(false); // Close modal on success
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Password reset failed.');
+      toast.error(err.message || 'Password reset failed. Please check your current password.');
     } finally {
       setSavingPassword(false);
     }
   };
-
-  const courses = [
-    { code: 'ICD110', name: 'Advanced Software Engineering' }
-  ];
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-sans items-start animate-in fade-in duration-200">
@@ -70,42 +109,66 @@ export const StudentSettings: React.FC = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5 text-slate-700 text-xs">
-            <div className="space-y-1.5 md:col-span-2 text-left">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Email address</span>
-              <div className="leading-relaxed">
-                <span className="font-extrabold text-[#4F3FF0]">{user?.email || 'nethmakannangara07@gmail.com'}</span>{' '}
-                <span className="text-[10px] text-slate-400 font-normal">
-                  (Hidden from everyone except users with appropriate permissions)
+          {loading ? (
+            <div className="flex justify-center items-center py-10 gap-2">
+              <Loader2 className="h-5 w-5 animate-spin text-[#4F3FF0]" />
+              <span className="text-slate-450 font-bold uppercase tracking-wider text-[10px]">Loading profile details...</span>
+            </div>
+          ) : error ? (
+            <div className="flex gap-2 items-center text-rose-500 py-4 justify-center">
+              <AlertCircle className="h-4.5 w-4.5" />
+              <span className="text-xs font-bold">{error}</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5 text-slate-700 text-xs">
+              <div className="space-y-1.5 md:col-span-2 text-left">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Email address</span>
+                <div className="leading-relaxed">
+                  <span className="font-extrabold text-[#4F3FF0]">{profile?.email || user?.email}</span>{' '}
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    (Hidden from everyone except users with appropriate permissions)
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5 text-left">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Registration Number</span>
+                <span className="font-extrabold text-slate-800">{profile?.regNo || 'Unassigned'}</span>
+              </div>
+
+              <div className="space-y-1.5 text-left">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">National Identity Card (NIC)</span>
+                <span className="font-extrabold text-slate-800">{profile?.nic || 'Not Provided'}</span>
+              </div>
+
+              <div className="space-y-1.5 text-left">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Gender</span>
+                <span className="font-extrabold text-slate-800">{profile?.gender || 'Not Specified'}</span>
+              </div>
+
+              <div className="space-y-1.5 text-left">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Date of Birth</span>
+                <span className="font-extrabold text-slate-800">
+                  {profile?.dob ? new Date(profile.dob).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'Not Specified'}
                 </span>
               </div>
-            </div>
 
-            <div className="space-y-1.5 text-left">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Country</span>
-              <span className="font-extrabold text-slate-800">Sri Lanka</span>
-            </div>
+              <div className="space-y-1.5 md:col-span-2 text-left">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Postal Address</span>
+                <span className="font-extrabold text-slate-800">{profile?.address || 'Not Provided'}</span>
+              </div>
 
-            <div className="space-y-1.5 text-left">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Timezone</span>
-              <span className="font-extrabold text-slate-800">Asia/Colombo</span>
-            </div>
+              <div className="space-y-1.5 text-left">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Country</span>
+                <span className="font-extrabold text-slate-800">Sri Lanka</span>
+              </div>
 
-            <div className="space-y-1.5 text-left">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Gender</span>
-              <span className="font-extrabold text-slate-800">Male</span>
+              <div className="space-y-1.5 text-left">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Timezone</span>
+                <span className="font-extrabold text-slate-800">Asia/Colombo</span>
+              </div>
             </div>
-
-            <div className="space-y-1.5 text-left">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">A/L Year</span>
-              <span className="font-extrabold text-slate-800">2021</span>
-            </div>
-
-            <div className="space-y-1.5 md:col-span-2 text-left">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Subject Stream</span>
-              <span className="font-extrabold text-slate-800">Technology</span>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Reports Card */}
@@ -139,15 +202,19 @@ export const StudentSettings: React.FC = () => {
           <div className="space-y-3">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block text-left">Course profiles</span>
             <div className="flex flex-col gap-2.5 max-h-[220px] overflow-y-auto pr-0.5">
-              {courses.map((course, idx) => (
-                <Link
-                  key={idx}
-                  to={`/student/courses/${course.code}`}
-                  className="text-xs font-extrabold text-[#4F3FF0] hover:underline leading-relaxed block text-left"
-                >
-                  {course.name}
-                </Link>
-              ))}
+              {myCourses.length === 0 ? (
+                <p className="text-[10px] text-slate-450 italic text-left">No enrolled courses</p>
+              ) : (
+                myCourses.map((course, idx) => (
+                  <Link
+                    key={idx}
+                    to={`/student/courses/${course.courseId}`}
+                    className="text-xs font-extrabold text-[#4F3FF0] hover:underline leading-relaxed block text-left"
+                  >
+                    {course.courseName}
+                  </Link>
+                ))
+              )}
             </div>
             <a
               href="#"
@@ -166,10 +233,11 @@ export const StudentSettings: React.FC = () => {
             Login activity
           </h3>
           <div className="text-xs text-left space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">First access to site</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Enrollment Date</span>
             <p className="font-extrabold text-slate-800 leading-relaxed">
-              Saturday, 2 March 2024, 10:56 AM{' '}
-              <span className="text-slate-400 font-normal">(2 years 153 days)</span>
+              {profile?.enrollmentDate 
+                ? new Date(profile.enrollmentDate).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) 
+                : 'Not Set'}
             </p>
           </div>
         </div>

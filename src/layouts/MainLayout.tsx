@@ -57,6 +57,18 @@ const getBatchForCourse = (courseId: string, courseName: string): string => {
 };
 
 const getBreadcrumbLabel = (segment: string, dbCourses: any[] = []): string => {
+  // Case-insensitive lookup in localStorage
+  let storedName = null;
+  const targetKey = `user_name_${segment.toLowerCase()}`;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.toLowerCase() === targetKey) {
+      storedName = localStorage.getItem(key);
+      break;
+    }
+  }
+  if (storedName) return storedName;
+
   const customMap: Record<string, string> = {
     dashboard: 'Dashboard',
     academics: 'My Academics',
@@ -131,6 +143,15 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedLinks, setExpandedLinks] = useState<Record<string, boolean>>({});
   const [dbCourses, setDbCourses] = useState<any[]>([]);
+  const [, setBreadcrumbUpdate] = useState(0);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setBreadcrumbUpdate(prev => prev + 1);
+    };
+    window.addEventListener('update-breadcrumbs', handleUpdate);
+    return () => window.removeEventListener('update-breadcrumbs', handleUpdate);
+  }, []);
 
   useEffect(() => {
     courseService.getCourses()
@@ -140,14 +161,32 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
 
   const generateBreadcrumbs = () => {
     const rawSegments = location.pathname.split('/').filter(x => x);
-    const items = [{ label: 'Dashboard', path: user?.role === 'ADMIN' ? '/admin/dashboard' : '/student/dashboard' }];
+    
+    const role = user?.role?.toUpperCase() || 'STUDENT';
+    let dashPath = '/student/dashboard';
+    let prefixPath = '/student';
+    if (role === 'ADMIN') {
+      dashPath = '/admin/dashboard';
+      prefixPath = '/admin';
+    } else if (role === 'TEACHER') {
+      dashPath = '/teacher/dashboard';
+      prefixPath = '/teacher';
+    } else if (role === 'REVIEWER') {
+      dashPath = '/reviewer/dashboard';
+      prefixPath = '/reviewer';
+    } else if (role === 'PARENT') {
+      dashPath = '/parent/dashboard';
+      prefixPath = '/parent';
+    }
+
+    const items = [{ label: 'Dashboard', path: dashPath }];
     
     const subSegments = rawSegments.filter(seg => {
       const lower = seg.toLowerCase();
       return lower !== 'student' && lower !== 'admin' && lower !== 'parent' && lower !== 'teacher' && lower !== 'reviewer' && lower !== 'dashboard';
     });
     
-    let currentPath = user?.role === 'ADMIN' ? '/admin' : '/student';
+    let currentPath = prefixPath;
     subSegments.forEach((seg) => {
       currentPath += `/${seg}`;
       items.push({

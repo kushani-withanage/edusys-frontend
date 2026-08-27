@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Loader2, 
   AlertCircle, 
@@ -9,6 +9,7 @@ import Button from '@/components/common/Button';
 import TextField from '@/components/common/TextField';
 import { gradeService, type GradeData } from '@/services/gradeService';
 import { studentService } from '@/services/studentService';
+import { courseService } from '@/services/courseService';
 import type { Student } from '@/interfaces';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
@@ -28,6 +29,8 @@ export const Results: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [grades, setGrades] = useState<GradeRecord[]>([]);
   const [rawGrades, setRawGrades] = useState<any[]>([]); // holds raw GradeDTOs from backend
+  const [courses, setCourses] = useState<any[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,42 +45,24 @@ export const Results: React.FC = () => {
     examScore: '0'
   });
 
-  // --- Mock Fallbacks (Sandbox visualization mode) ---
-  const defaultStudents = useMemo<Student[]>(() => [
-    { studentId: 'stu-1', fullName: 'Sachin Samarawickrama', email: 'sachin@gmail.com', phone: '+94771112222', status: 'ACTIVE', regNo: 'pr268924021' },
-    { studentId: 'stu-2', fullName: 'Pawara Minimuthu', email: 'pawara@gmail.com', phone: '+94773334444', status: 'ACTIVE', regNo: 'pr268924022' },
-    { studentId: 'stu-3', fullName: 'Sharadha Madusinghe', email: 'sharadha@gmail.com', phone: '+94775556666', status: 'ACTIVE', regNo: 'pr268924023' }
-  ], []);
-
-  const defaultGrades = useMemo<GradeRecord[]>(() => [
-    { studentId: 'stu-1', courseId: 'course-general', assignmentScore: 88, examScore: 90, totalAverage: 89.0 },
-    { studentId: 'stu-2', courseId: 'course-general', assignmentScore: 95, examScore: 92, totalAverage: 93.5 },
-    { studentId: 'stu-3', courseId: 'course-general', assignmentScore: 78, examScore: 80, totalAverage: 79.0 }
-  ], []);
-
-  // Map pending deliverables to students for roster display
-  const pendingDeliverables = useMemo(() => {
-    return {
-      'stu-1': { countText: '1 delay tests', hasDelay: true },
-      'stu-2': { countText: 'All submitted', hasDelay: false },
-      'stu-3': { countText: '2 delay tests', hasDelay: true }
-    } as Record<string, { countText: string, hasDelay: boolean }>;
-  }, []);
-
   // --- Fetch API Data ---
   const fetchResultsData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const [studentsData, gradesData] = await Promise.all([
+      const [studentsData, gradesData, coursesData] = await Promise.all([
         studentService.getStudents(),
-        gradeService.getGrades()
+        gradeService.getGrades(),
+        courseService.getCourses().catch(() => [])
       ]);
 
-      // If backend succeeds, set state
-      setStudents(studentsData.length > 0 ? studentsData : defaultStudents);
+      setStudents(studentsData);
       setRawGrades(gradesData);
+      setCourses(coursesData);
+      if (coursesData && coursesData.length > 0) {
+        setSelectedCourseId(coursesData[0].courseId || '');
+      }
 
       // Parse gradeValue ("assignmentScore,examScore")
       const parsedGrades: GradeRecord[] = gradesData.map(g => {
@@ -105,13 +90,12 @@ export const Results: React.FC = () => {
         };
       });
 
-      // If parsed list is empty, merge with defaultGrades for visual feedback
-      setGrades(parsedGrades.length > 0 ? parsedGrades : defaultGrades);
+      setGrades(parsedGrades);
     } catch (err: any) {
       console.error(err);
-      setError('Could not connect to backend server. Running in simulated sandbox mode.');
-      setStudents(defaultStudents);
-      setGrades(defaultGrades);
+      setError('Could not connect to backend server. Please try again.');
+      setStudents([]);
+      setGrades([]);
     } finally {
       setLoading(false);
     }
@@ -119,14 +103,14 @@ export const Results: React.FC = () => {
 
   useEffect(() => {
     fetchResultsData();
-  }, [defaultStudents, defaultGrades]);
+  }, []);
 
   // --- Handle Edit Click ---
   const handleEditGradeClick = (student: Student) => {
     setSelectedStudent(student);
     
     // Find existing scores
-    const existing = grades.find(g => g.studentId === student.studentId);
+    const existing = grades.find(g => g.studentId === student.studentId && g.courseId === selectedCourseId);
     setGradeForm({
       assignmentScore: existing ? String(existing.assignmentScore) : '0',
       examScore: existing ? String(existing.examScore) : '0'
@@ -149,11 +133,11 @@ export const Results: React.FC = () => {
       setSubmitting(true);
       
       // Find if we already have a raw grade ID on the backend
-      const existingRaw = rawGrades.find(rg => rg.studentId === selectedStudent.studentId);
+      const existingRaw = rawGrades.find(rg => rg.studentId === selectedStudent.studentId && rg.courseId === selectedCourseId);
       
       const payload: GradeData = {
         studentId: selectedStudent.studentId,
-        courseId: 'course-general',
+        courseId: selectedCourseId,
         gradeValue: encodedValue,
         publishedDate: new Date().toISOString().split('T')[0]
       };
@@ -170,8 +154,8 @@ export const Results: React.FC = () => {
       }
 
       // Sync UI state list
-      const updatedGrades = grades.some(g => g.studentId === selectedStudent.studentId)
-        ? grades.map(g => g.studentId === selectedStudent.studentId ? {
+      const updatedGrades = grades.some(g => g.studentId === selectedStudent.studentId && g.courseId === selectedCourseId)
+        ? grades.map(g => g.studentId === selectedStudent.studentId && g.courseId === selectedCourseId ? {
             ...g,
             assignmentScore: assignment,
             examScore: exam,
@@ -179,7 +163,7 @@ export const Results: React.FC = () => {
           } : g)
         : [...grades, {
             studentId: selectedStudent.studentId,
-            courseId: 'course-general',
+            courseId: selectedCourseId,
             assignmentScore: assignment,
             examScore: exam,
             totalAverage: computedAverage
@@ -191,8 +175,8 @@ export const Results: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       // Fallback
-      const updatedGrades = grades.some(g => g.studentId === selectedStudent.studentId)
-        ? grades.map(g => g.studentId === selectedStudent.studentId ? {
+      const updatedGrades = grades.some(g => g.studentId === selectedStudent.studentId && g.courseId === selectedCourseId)
+        ? grades.map(g => g.studentId === selectedStudent.studentId && g.courseId === selectedCourseId ? {
             ...g,
             assignmentScore: assignment,
             examScore: exam,
@@ -200,7 +184,7 @@ export const Results: React.FC = () => {
           } : g)
         : [...grades, {
             studentId: selectedStudent.studentId,
-            courseId: 'course-general',
+            courseId: selectedCourseId,
             assignmentScore: assignment,
             examScore: exam,
             totalAverage: computedAverage
@@ -241,6 +225,27 @@ export const Results: React.FC = () => {
             Configure academic records, grading, class rosters, materials, and testing schedules.
           </p>
         </div>
+      </div>
+
+      {/* Course Selector Dropdown */}
+      <div className="flex items-center gap-3 bg-white border border-[#E9EDF5] p-4.5 rounded-2xl shadow-sm max-w-sm">
+        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider shrink-0 select-none">
+          Select Course:
+        </label>
+        <select
+          value={selectedCourseId}
+          onChange={(e) => setSelectedCourseId(e.target.value)}
+          className="flex-1 bg-[#F8FAFC] border border-[#E2E8F0] hover:border-slate-350 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-800 outline-none transition-all cursor-pointer"
+        >
+          {courses.map(c => (
+            <option key={c.courseId} value={c.courseId}>
+              {c.courseName}
+            </option>
+          ))}
+          {courses.length === 0 && (
+            <option value="">No courses registered</option>
+          )}
+        </select>
       </div>
 
       {/* Tabs Selector Bar */}
@@ -303,7 +308,7 @@ export const Results: React.FC = () => {
                   <tbody className="divide-y divide-[#E9EDF5] text-slate-800 text-xs font-semibold">
                     {students.map(stu => {
                       // Find student's grade records
-                      const score = grades.find(g => g.studentId === stu.studentId) || {
+                      const score = grades.find(g => g.studentId === stu.studentId && g.courseId === selectedCourseId) || {
                         assignmentScore: 0,
                         examScore: 0,
                         totalAverage: 0
@@ -368,7 +373,8 @@ export const Results: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-[#E9EDF5] text-slate-800 text-xs font-semibold">
                     {students.map(stu => {
-                      const deliverable = pendingDeliverables[stu.studentId] || { countText: 'All submitted', hasDelay: false };
+                      const hasGrade = grades.some(g => g.studentId === stu.studentId && g.courseId === selectedCourseId);
+                      const deliverable = hasGrade ? { countText: 'All graded', hasDelay: false } : { countText: 'No grades entered', hasDelay: true };
                       return (
                         <tr key={stu.studentId} className="hover:bg-slate-50/30 transition-colors duration-150">
                           <td className="px-6 py-4.5 font-extrabold text-slate-800 text-sm">

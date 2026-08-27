@@ -11,6 +11,7 @@ export interface Student {
   dob?: string;
   gender?: string;
   nic?: string;
+  currentBatchId?: string;
 }
 
 export interface Teacher {

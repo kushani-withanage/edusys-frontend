@@ -3,8 +3,8 @@ import MainLayout, { type SidebarGroup } from './MainLayout';
 import { 
   LayoutDashboard, 
   BookOpen, 
-  CreditCard,
-  Shield
+  Shield,
+  Settings
 } from 'lucide-react';
 
 const parentSidebarGroups: SidebarGroup[] = [
@@ -18,7 +18,12 @@ const parentSidebarGroups: SidebarGroup[] = [
     category: 'Child monitoring',
     links: [
       { label: 'Academic Progress', path: '/parent/academics', icon: BookOpen },
-      { label: 'Tuition Fees', path: '/parent/fees', icon: CreditCard },
+    ]
+  },
+  {
+    category: 'Account',
+    links: [
+      { label: 'Profile Settings', path: '/parent/settings', icon: Settings },
     ]
   }
 ];
