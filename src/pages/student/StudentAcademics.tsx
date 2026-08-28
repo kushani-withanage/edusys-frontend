@@ -104,6 +104,11 @@ export const StudentAcademics: React.FC = () => {
                     className="bg-white border border-[#E9EDF5] hover:border-[#4F3FF0]/40 hover:bg-[#4F3FF0]/5 hover:shadow-md p-6 rounded-2xl shadow-sm transition-all block cursor-pointer text-left animate-in fade-in duration-200"
                   >
                     <h4 className="font-extrabold text-slate-800 text-base hover:text-[#4F3FF0] transition-colors">{c.courseName}</h4>
+                    {c.description && (
+                      <p className="text-slate-500 text-xs font-semibold leading-relaxed line-clamp-2 mt-1.5">
+                        {c.description}
+                      </p>
+                    )}
                     <div className="flex flex-col gap-0.5 mt-3 text-xs font-bold text-slate-500">
                       {c.batchCode && (
                         <div>

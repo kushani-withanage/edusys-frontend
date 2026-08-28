@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Loader2, Trash2, X, AlertCircle } from 'lucide-react';
 import { batchService } from '@/services/batchService';
-import { studentService } from '@/services/studentService';
+import { courseService } from '@/services/courseService';
 import { api } from '@/utils/api';
 import { toast } from '@/utils/toast';
 import type { Batch } from './types';
@@ -26,6 +26,10 @@ export const BatchesPlanner: React.FC<BatchesPlannerProps> = ({ addTrigger = 0 }
   const [inlineError, setInlineError] = useState('');
   const checkTimeoutRef = useRef<any>(null);
 
+  // New course selection states
+  const [allCourses, setAllCourses] = useState<any[]>([]);
+  const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
+
   // Batch Detail modal state
   const [selectedDetailBatch, setSelectedDetailBatch] = useState<Batch | null>(null);
   const [detailCourses, setDetailCourses] = useState<any[]>([]);
@@ -40,21 +44,25 @@ export const BatchesPlanner: React.FC<BatchesPlannerProps> = ({ addTrigger = 0 }
     };
   }, []);
 
-  const fetchBatches = async () => {
+  const fetchBatchesAndCourses = async () => {
     try {
       setLoading(true);
-      const data = await batchService.getBatches();
-      setBatches(data || []);
+      const [batchesData, coursesData] = await Promise.all([
+        batchService.getBatches(),
+        courseService.getCourses().catch(() => [])
+      ]);
+      setBatches(batchesData || []);
+      setAllCourses(coursesData || []);
     } catch (err) {
-      console.error('Error fetching batches:', err);
-      toast.error('Failed to load batches.');
+      console.error('Error fetching batches or courses:', err);
+      toast.error('Failed to load batches or courses.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchBatches();
+    fetchBatchesAndCourses();
   }, []);
 
   // Listen to parent add action trigger
@@ -63,6 +71,7 @@ export const BatchesPlanner: React.FC<BatchesPlannerProps> = ({ addTrigger = 0 }
       setBatchForm({ batchName: '', startDate: '', endDate: '', status: 'Active' });
       setEditingBatchId(null);
       setInlineError('');
+      setSelectedCourseIds([]);
       setShowBatchModal(true);
     }
   }, [addTrigger]);
@@ -117,7 +126,8 @@ export const BatchesPlanner: React.FC<BatchesPlannerProps> = ({ addTrigger = 0 }
         batchName: batchForm.batchName.trim(),
         startDate: batchForm.startDate,
         endDate: batchForm.endDate,
-        status: batchForm.status || 'Active'
+        status: batchForm.status || 'Active',
+        courses: selectedCourseIds.map(id => ({ courseId: id }))
       };
       
       if (editingBatchId) {
@@ -132,6 +142,7 @@ export const BatchesPlanner: React.FC<BatchesPlannerProps> = ({ addTrigger = 0 }
       setShowBatchModal(false);
       setBatchForm({ batchName: '', startDate: '', endDate: '', status: 'Active' });
       setEditingBatchId(null);
+      setSelectedCourseIds([]);
       setInlineError('');
     } catch (err: any) {
       console.error(err);
@@ -152,7 +163,7 @@ export const BatchesPlanner: React.FC<BatchesPlannerProps> = ({ addTrigger = 0 }
     }
   };
 
-  const handleEditBatchClick = (batch: Batch) => {
+  const handleEditBatchClick = async (batch: Batch) => {
     setEditingBatchId(batch.batchId);
     setBatchForm({
       batchName: batch.batchName,
@@ -161,6 +172,15 @@ export const BatchesPlanner: React.FC<BatchesPlannerProps> = ({ addTrigger = 0 }
       status: batch.status || 'Active'
     });
     setInlineError('');
+    
+    try {
+      const coursesData = await batchService.getBatchCourses(batch.batchId).catch(() => []);
+      setSelectedCourseIds(coursesData.map((c: any) => c.courseId));
+    } catch (e) {
+      console.error(e);
+      setSelectedCourseIds([]);
+    }
+    
     setShowBatchModal(true);
   };
 
@@ -168,20 +188,12 @@ export const BatchesPlanner: React.FC<BatchesPlannerProps> = ({ addTrigger = 0 }
     setSelectedDetailBatch(batch);
     setLoadingDetail(true);
     try {
-      const [coursesData, enrollmentsData, studentsData] = await Promise.all([
+      const [coursesData, studentsData] = await Promise.all([
         batchService.getBatchCourses(batch.batchId).catch(() => []),
-        api.get<any[]>('/api/v1/enrollments').catch(() => []),
-        studentService.getStudents().catch(() => [])
+        api.get<any[]>(`/api/v1/batches/${batch.batchId}/students`).catch(() => [])
       ]);
       setDetailCourses(coursesData);
-
-      const enrolledStudentIds = new Set(
-        enrollmentsData
-          .filter((e: any) => e.batchId === batch.batchId)
-          .map((e: any) => e.studentId)
-      );
-      const roster = studentsData.filter((s: any) => enrolledStudentIds.has(s.studentId));
-      setDetailStudents(roster);
+      setDetailStudents(studentsData);
     } catch (err) {
       console.error("Error loading batch details:", err);
       setDetailCourses([]);
@@ -341,6 +353,36 @@ export const BatchesPlanner: React.FC<BatchesPlannerProps> = ({ addTrigger = 0 }
                   <option value="Pending">Pending</option>
                   <option value="Finished">Finished</option>
                 </select>
+              </div>
+
+              <div className="space-y-2.5">
+                <label className="block text-xs font-bold tracking-wider uppercase text-slate-700">Assign Courses & Modules</label>
+                {allCourses.length === 0 ? (
+                  <p className="text-slate-400 text-xs font-semibold">No courses registered in system.</p>
+                ) : (
+                  <div className="max-h-[140px] overflow-y-auto border border-[#E2E8F0] rounded-xl p-3 bg-[#F8FAFC] space-y-2">
+                    {allCourses.map((c: any) => {
+                      const isChecked = selectedCourseIds.includes(c.courseId);
+                      return (
+                        <label key={c.courseId} className="flex items-center gap-2.5 text-xs text-slate-700 font-bold select-none cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              setSelectedCourseIds(prev => 
+                                isChecked 
+                                  ? prev.filter(id => id !== c.courseId)
+                                  : [...prev, c.courseId]
+                              );
+                            }}
+                            className="rounded text-[#4F3FF0] focus:ring-[#4F3FF0] border-slate-300 cursor-pointer"
+                          />
+                          <span>{c.courseName}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">

@@ -31,6 +31,7 @@ import { ExamResultPage } from '@/pages/student/ExamResultPage';
 import StudentCareer from '@/pages/student/StudentCareer';
 import StudentSettings from '@/pages/student/StudentSettings';
 import StudentCourseDetail from '@/pages/student/StudentCourseDetail';
+import { StudentGradesPage } from '@/pages/student/StudentGradesPage';
 
 import ParentDashboard from '@/pages/parent/ParentDashboard';
 import { ParentProfileSettingsPage } from '@/pages/parent/ParentProfileSettingsPage';
@@ -99,6 +100,7 @@ function AppRoutes() {
           <Route path="/student/academics" element={<StudentAcademics />} />
           <Route path="/student/courses/:courseId" element={<StudentCourseDetail />} />
           <Route path="/student/career" element={<StudentCareer />} />
+          <Route path="/student/grades" element={<StudentGradesPage />} />
           <Route path="/student/settings" element={<StudentSettings />} />
           <Route path="/student/exams/:examId/take" element={<ExamTakingPage />} />
           <Route path="/student/exams/attempts/:attemptId/result" element={<ExamResultPage />} />

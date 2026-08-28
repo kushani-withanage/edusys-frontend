@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/utils/api';
-import { calendarService } from '@/services/calendarService';
 import { gradeService } from '@/services/gradeService';
 
 interface CalendarEvent {
@@ -59,32 +58,42 @@ export const StudentDashboard: React.FC = () => {
   }, [user]);
 
   // Calendar States
-  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 7, 2)); // Default to August 2, 2026
-  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date(2026, 7, 2)); // Default selected date
-  const [events, setEvents] = useState<CalendarEvent[]>([
-    { id: '1', title: 'Advanced SE Assignment 1', date: '2026-08-05', type: 'assignment', course: 'Advanced Software Engineering', time: '11:59 PM' },
-    { id: '2', title: 'OOP Review Session', date: '2026-08-18', type: 'class', course: 'Object Oriented Programming', time: '02:00 PM' },
-    { id: '3', title: 'Design Patterns Exam', date: '2026-08-20', type: 'exam', course: 'Advanced Software Engineering', time: '09:00 AM' },
-    { id: '4', title: 'Clean Architecture Review', date: '2026-08-28', type: 'class', course: 'Advanced Software Engineering', time: '03:00 PM' }
-  ]);
+  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 6, 25)); // Defaults to July 2026 to showcase sample data
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date(2026, 6, 25));
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
 
   useEffect(() => {
-    calendarService.getEvents()
-      .then(data => {
-        if (data.length > 0) {
-          const mapped = data.map((item: any) => ({
-            id: item.calendarId,
-            title: item.eventName,
-            date: item.eventDate,
-            type: (item.status?.toLowerCase() === 'exam' ? 'exam' : 
-                   item.status?.toLowerCase() === 'holiday' ? 'event' : 'class') as any,
-            course: item.description || 'Academic Program',
-            time: '09:00 AM'
-          }));
-          setEvents(mapped);
-        }
-      })
-      .catch(err => console.error("Error loading calendar events:", err));
+    const fetchLmsEvents = async () => {
+      try {
+        const [apiExams, apiAssignments] = await Promise.all([
+          api.get<any[]>('/api/v1/exams').catch(() => []),
+          api.get<any[]>('/api/v1/assignments').catch(() => [])
+        ]);
+
+        const examEvents: CalendarEvent[] = apiExams.map(ex => ({
+          id: `exam-${ex.id}`,
+          title: ex.title,
+          date: ex.startTime ? ex.startTime.split('T')[0] : '2026-07-25',
+          type: 'exam',
+          course: ex.description || 'LMS Exam Session',
+          time: ex.startTime ? ex.startTime.split('T')[1]?.substring(0, 5) : '09:00 AM'
+        }));
+
+        const assignmentEvents: CalendarEvent[] = apiAssignments.map(asg => ({
+          id: `assignment-${asg.assignmentId}`,
+          title: asg.title,
+          date: asg.dueDate ? asg.dueDate.split('T')[0] : '2026-07-25',
+          type: 'assignment',
+          course: asg.description || 'Course Assignment Submission',
+          time: asg.dueDate ? asg.dueDate.split('T')[1]?.substring(0, 5) : '11:59 PM'
+        }));
+
+        setEvents([...examEvents, ...assignmentEvents]);
+      } catch (err) {
+        console.error('Error fetching student calendar events:', err);
+      }
+    };
+    fetchLmsEvents();
   }, []);
 
   const year = currentDate.getFullYear();
@@ -244,7 +253,12 @@ export const StudentDashboard: React.FC = () => {
                        {c.status || 'Ongoing'}
                      </span>
                    </div>
-                   <div className="flex flex-col gap-0.5 mt-2 text-[10px] font-bold text-slate-500">
+                   {c.description && (
+                     <p className="text-slate-500 text-xs font-semibold leading-relaxed line-clamp-2 mt-1.5">
+                       {c.description}
+                     </p>
+                   )}
+                   <div className="flex flex-col gap-0.5 mt-2.5 text-[10px] font-bold text-slate-500">
                       {c.batchCode && (
                         <div>
                           Batch: <span className="text-slate-850 font-black">{c.batchCode}</span>

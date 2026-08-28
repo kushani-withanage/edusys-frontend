@@ -48,9 +48,9 @@ const adminSidebarGroups: SidebarGroup[] = [
   {
     category: 'Career Scale',
     links: [
+      { label: 'Points & Levels', path: '/admin/points-levels', icon: Trophy },
       { label: 'Task Creator', path: '/admin/task-creator', icon: CheckSquare },
       { label: 'Reviewer Workflow', path: '/admin/reviewer-workflow', icon: UserCheck },
-      { label: 'Points & Levels', path: '/admin/points-levels', icon: Trophy },
     ]
   },
   {

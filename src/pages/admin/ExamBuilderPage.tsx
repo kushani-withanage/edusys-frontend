@@ -77,6 +77,7 @@ export const ExamBuilderPage: React.FC = () => {
   const [shuffleQuestions, setShuffleQuestions] = useState(false);
   const [shuffleOptions, setShuffleOptions] = useState(false);
   const [attemptsAllowed, setAttemptsAllowed] = useState('1');
+  const [passMarks, setPassMarks] = useState('40');
 
   useEffect(() => {
     const initData = async () => {
@@ -113,6 +114,7 @@ export const ExamBuilderPage: React.FC = () => {
             setShuffleQuestions(!!exam.shuffleQuestions);
             setShuffleOptions(!!exam.shuffleOptions);
             setAttemptsAllowed(exam.attemptsAllowed?.toString() || '1');
+            setPassMarks(exam.passMarks?.toString() || '40');
           }
         }
       } catch (err: any) {
@@ -200,6 +202,12 @@ export const ExamBuilderPage: React.FC = () => {
       return;
     }
 
+    const passMarksVal = Number(passMarks);
+    if (isNaN(passMarksVal) || passMarksVal < 0) {
+      toast.error('Please specify a valid pass mark.');
+      return;
+    }
+
     const payload = {
       title,
       description,
@@ -210,6 +218,7 @@ export const ExamBuilderPage: React.FC = () => {
       shuffleQuestions,
       shuffleOptions,
       attemptsAllowed: attemptsVal,
+      passMarks: passMarksVal,
       audiences,
       questionIds: selectedQuestionIds,
       createdBy: user?.userId || 'usr0007' // Logged in user ID (admin)
@@ -518,7 +527,7 @@ export const ExamBuilderPage: React.FC = () => {
           <div className="space-y-4 animate-in fade-in-50 duration-150">
             <h3 className="text-sm font-black text-slate-700 uppercase tracking-wider">Step 4: Exam Settings</h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Duration (Minutes)</label>
                 <input
@@ -538,6 +547,17 @@ export const ExamBuilderPage: React.FC = () => {
                   onChange={(e) => setAttemptsAllowed(e.target.value)}
                   className="w-full px-3.5 py-2 border border-slate-200 focus:border-[#4F3FF0] rounded-xl outline-none text-xs font-semibold text-slate-800"
                   placeholder="e.g. 1"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Pass Marks</label>
+                <input
+                  type="number"
+                  value={passMarks}
+                  onChange={(e) => setPassMarks(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-slate-200 focus:border-[#4F3FF0] rounded-xl outline-none text-xs font-semibold text-slate-800"
+                  placeholder="e.g. 40"
                 />
               </div>
 

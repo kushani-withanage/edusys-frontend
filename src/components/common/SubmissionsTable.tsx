@@ -41,7 +41,7 @@ export const SubmissionsTable: React.FC<SubmissionsTableProps> = ({
   onReview
 }) => {
   return (
-    <div className="bg-white border border-[#E9EDF5] rounded-3xl p-6 shadow-sm space-y-4 text-left font-sans select-none flex flex-col h-full max-h-[85vh]">
+    <div className="space-y-4 text-left font-sans select-none flex flex-col h-full w-full">
       <div>
         <h3 className="font-extrabold text-slate-800 text-sm font-heading">{title}</h3>
         <p className="text-slate-455 text-[10px] font-semibold mt-0.5">{subtitle}</p>

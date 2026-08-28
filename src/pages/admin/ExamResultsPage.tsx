@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Loader2, ArrowLeft, BarChart2, Eye } from 'lucide-react';
+import { Loader2, ArrowLeft, BarChart2 } from 'lucide-react';
 import { api } from '@/utils/api';
 import { toast } from '@/utils/toast';
 
@@ -152,7 +152,7 @@ export const ExamResultsPage: React.FC = () => {
                 <th className="px-6 py-4">STATUS</th>
                 <th className="px-6 py-4">SUBMITTED TIME</th>
                 <th className="px-6 py-4">SCORE</th>
-                <th className="px-6 py-4 text-right">ACTION</th>
+                <th className="px-6 py-4 text-right">STATUS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E9EDF5] text-slate-850 text-xs font-semibold">
@@ -177,13 +177,18 @@ export const ExamResultsPage: React.FC = () => {
                   <td className="px-6 py-4 font-extrabold text-slate-800">
                     {attempt.score} / {data.maxMarks}
                   </td>
-                  <td className="px-6 py-4 text-right">
-                    <button
+                  <td className="px-6 py-4 text-right select-none">
+                    <span 
                       onClick={() => navigate(`../exams/attempts/${attempt.attemptId}/result`)}
-                      className="px-3.5 py-1.5 border border-slate-200 hover:border-[#4F3FF0] bg-white hover:bg-slate-50 text-slate-600 hover:text-[#4F3FF0] text-[10px] font-black rounded-xl transition-all cursor-pointer inline-flex items-center gap-1"
+                      className={`inline-flex px-2.5 py-1 border rounded-xl text-[8.5px] font-black uppercase tracking-wider cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-sm ${
+                        attempt.score >= (data.passMarks || 40)
+                          ? 'bg-emerald-50 border-emerald-250 text-emerald-800 hover:bg-emerald-100/60 shadow-emerald-50'
+                          : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100/60 shadow-rose-50'
+                      }`}
+                      title="Click to view student sheet"
                     >
-                      <Eye className="h-3.5 w-3.5" /> View Sheet
-                    </button>
+                      {attempt.score >= (data.passMarks || 40) ? 'PASS' : 'FAIL'}
+                    </span>
                   </td>
                 </tr>
               ))}

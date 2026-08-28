@@ -16,7 +16,9 @@ import {
   X,
   AlertCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  Link2,
+  ExternalLink
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { courseService } from '@/services/courseService';
@@ -52,14 +54,7 @@ const safeParseJson = (data: any, defaultValue: any = []) => {
 };
 
 const filterNonQuiz = (sectionsJson: any) => {
-  const parsed = safeParseJson(sectionsJson);
-  if (!Array.isArray(parsed)) return [];
-  return parsed.map((sect: any) => ({
-    ...sect,
-    items: Array.isArray(sect.items) 
-      ? sect.items.filter((item: any) => item && item.type === 'quiz') 
-      : []
-  }));
+  return safeParseJson(sectionsJson);
 };
 
 const formatDatetimeLocal = (val?: string) => {
@@ -77,7 +72,6 @@ export const StudentCourseDetail: React.FC = () => {
   const navigate = useNavigate();
   
   const isAdmin = user?.role?.toUpperCase() === 'ADMIN' || user?.role?.toUpperCase() === 'TEACHER' || user?.role?.toUpperCase() === 'REVIEWER';
-  const pathPrefix = user?.role?.toUpperCase() === 'TEACHER' ? '/teacher' : user?.role?.toUpperCase() === 'REVIEWER' ? '/reviewer' : '/admin';
 
   const [course, setCourse] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -161,10 +155,11 @@ export const StudentCourseDetail: React.FC = () => {
         const dbCourse = await courseService.getCourse(rawKey).catch(() => null);
         if (dbCourse) {
           setCourse({
-            code: dbCourse.batchCode || 'crs0001',
+            code: dbCourse.batchCode || '',
+            batchCode: dbCourse.batchCode,
             name: dbCourse.courseName,
-            program: 'iCD Program',
-            level: dbCourse.level || 'Level 1',
+            program: dbCourse.batchCode ? `${dbCourse.batchCode.match(/^[a-zA-Z]+/)?.[0] || 'iCD'} Program` : '',
+            level: dbCourse.level || '',
             certReqs: safeParseJson(dbCourse.certReqs),
             qualifyIntro: dbCourse.qualifyIntro || '',
             qualifyReqs: safeParseJson(dbCourse.qualifyReqs),
@@ -189,9 +184,10 @@ export const StudentCourseDetail: React.FC = () => {
           if (found) {
             setCourse({
               code: found.batchCode,
+              batchCode: found.batchCode,
               name: found.courseName,
-              program: 'iCD Program',
-              level: found.level || 'Level 1',
+              program: found.batchCode ? `${found.batchCode.match(/^[a-zA-Z]+/)?.[0] || 'iCD'} Program` : '',
+              level: found.level || '',
               certReqs: safeParseJson(found.certReqs),
               qualifyIntro: found.qualifyIntro || '',
               qualifyReqs: safeParseJson(found.qualifyReqs),
@@ -283,13 +279,30 @@ export const StudentCourseDetail: React.FC = () => {
 
   const calculateTimeRemainingBeforeSubmit = (dueDateStr?: string, dueTimeStr?: string) => {
     if (!dueDateStr) return { isOverdue: false, text: '' };
-    const dueDateTimeStr = dueTimeStr ? `${dueDateStr}T${dueTimeStr}:00` : `${dueDateStr}T23:59:59`;
-    const dueDate = new Date(dueDateTimeStr);
-    const now = new Date();
+    
+    let dueDate: Date;
+    if (dueDateStr.includes('T') || dueDateStr.includes(' ')) {
+      dueDate = new Date(dueDateStr.replace(' ', 'T'));
+    } else {
+      const dueDateTimeStr = dueTimeStr ? `${dueDateStr}T${dueTimeStr}:00` : `${dueDateStr}T23:59:59`;
+      dueDate = new Date(dueDateTimeStr);
+    }
 
+    if (isNaN(dueDate.getTime())) {
+      return { isOverdue: false, text: 'No due date set' };
+    }
+
+    const now = new Date();
     const diffMs = dueDate.getTime() - now.getTime();
     const isOverdue = diffMs < 0;
     const absDiffMs = Math.abs(diffMs);
+
+    if (isOverdue) {
+      return {
+        isOverdue: true,
+        text: 'Time has ended'
+      };
+    }
 
     const mins = Math.floor(absDiffMs / (1000 * 60)) % 60;
     const hours = Math.floor(absDiffMs / (1000 * 60 * 60)) % 24;
@@ -301,8 +314,8 @@ export const StudentCourseDetail: React.FC = () => {
     diffText += `${mins}m`;
 
     return {
-      isOverdue,
-      text: isOverdue ? `${diffText} overdue` : `${diffText} remaining`
+      isOverdue: false,
+      text: `${diffText} remaining`
     };
   };
 
@@ -370,7 +383,7 @@ export const StudentCourseDetail: React.FC = () => {
         itemIdx
       });
     } catch (e) {
-      console.error('Failed to load assignment details', e);
+      console.info('Assignment record not yet synced with database, initializing with default parameters.');
       let files: any[] = [];
       if (item.pdfUrl) {
         if (item.pdfUrl.startsWith('[')) {
@@ -711,6 +724,44 @@ export const StudentCourseDetail: React.FC = () => {
 
     try {
       setLoading(true);
+
+      // Ensure all assignment syllabus items have corresponding database records
+      for (const section of cleanSections) {
+        if (section.items) {
+          for (const item of section.items) {
+            if (item.type === 'assignment') {
+              try {
+                // Try checking if it already exists
+                await api.get(`/api/v1/assignments/${item.id}`).catch(async () => {
+                  // If it doesn't exist (throws error), pre-create it with defaults
+                  const defaultAssignment = {
+                    assignmentId: item.id,
+                    title: item.title,
+                    description: 'No description provided.',
+                    allowSubmissionsFrom: item.startDate ? `${item.startDate}T00:00:00` : null,
+                    dueDate: item.deadline ? `${item.deadline}T${item.deadlineTime || '23:59'}:00` : null,
+                    cutOffDate: null,
+                    submissionTypeFile: true,
+                    submissionTypeOnlineText: false,
+                    maxSize: '50MB',
+                    displayDescription: false,
+                    alwaysShowDescription: false,
+                    onlyShowFiles: false,
+                    activityInstructions: '',
+                    maxFiles: 1,
+                    additionalFileName: '',
+                    additionalFileUrl: '[]'
+                  };
+                  await api.post('/api/v1/assignments', defaultAssignment);
+                });
+              } catch (err) {
+                console.error('Error pre-creating assignment:', item.title, err);
+              }
+            }
+          }
+        }
+      }
+
       await courseService.createCourse(payload);
       alert('Course outline saved successfully!');
       setIsEditMode(false);
@@ -874,7 +925,7 @@ export const StudentCourseDetail: React.FC = () => {
                     {course.name}
                   </h1>
                   <p className="text-white/80 text-[10px] font-extrabold uppercase tracking-widest mt-2">
-                    {course.program} | {course.level || 'Level 1'} | {course.isCompulsory ? 'Compulsory Courses' : 'Optional Courses'}
+                    {course.program} | {course.batchCode ? `Batch: ${course.batchCode} | ` : ''}{course.level || 'Level 1'} | {course.isCompulsory ? 'Compulsory Course' : 'Optional Course'}
                   </p>
                   {!isAdmin && (
                     <div className="mt-4 flex flex-col items-center gap-2">
@@ -1185,41 +1236,61 @@ export const StudentCourseDetail: React.FC = () => {
 
                             {/* Conditional fields based on type */}
                             {item.type === 'resource' && (
-                              <div className="flex flex-col gap-1.5 text-left">
-                                <label className="text-[8px] font-bold text-slate-450 uppercase block">Upload Resource (PDF or Photo)</label>
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="file"
-                                    accept=".pdf, image/*"
-                                    id={`upload-res-${idx}-${itemIdx}`}
-                                    className="hidden"
-                                    onChange={(e) => {
-                                      if (e.target.files && e.target.files.length > 0) {
-                                        const file = e.target.files[0];
-                                        handleUpdateSyllabusItem(idx, itemIdx, 'pdfName', file.name);
-                                        const reader = new FileReader();
-                                        reader.onload = (event) => {
-                                          if (event.target?.result) {
-                                            handleUpdateSyllabusItem(idx, itemIdx, 'pdfUrl', event.target.result as string);
-                                          }
-                                        };
-                                        reader.readAsDataURL(file);
-                                      }
-                                    }}
-                                  />
-                                  <label
-                                    htmlFor={`upload-res-${idx}-${itemIdx}`}
-                                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-[10px] font-black rounded-lg transition-all cursor-pointer inline-flex items-center gap-1 shadow-sm"
-                                  >
-                                    <Upload className="h-3.5 w-3.5" /> Select File
-                                  </label>
-                                  {item.pdfName ? (
-                                    <span className="text-[10px] font-bold text-slate-600 truncate max-w-[200px]" title={item.pdfName}>
-                                      📎 {item.pdfName}
-                                    </span>
-                                  ) : (
-                                    <span className="text-[9px] font-bold text-slate-400 italic">No file selected</span>
-                                  )}
+                              <div className="flex flex-col gap-3 text-left w-full">
+                                <div className="space-y-1">
+                                  <label className="text-[8px] font-bold text-slate-450 uppercase block">Upload Resource File (PDF or Photo)</label>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="file"
+                                      accept=".pdf, image/*"
+                                      id={`upload-res-${idx}-${itemIdx}`}
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        if (e.target.files && e.target.files.length > 0) {
+                                          const file = e.target.files[0];
+                                          handleUpdateSyllabusItem(idx, itemIdx, 'pdfName', file.name);
+                                          const reader = new FileReader();
+                                          reader.onload = (event) => {
+                                            if (event.target?.result) {
+                                              handleUpdateSyllabusItem(idx, itemIdx, 'pdfUrl', event.target.result as string);
+                                            }
+                                          };
+                                          reader.readAsDataURL(file);
+                                        }
+                                      }}
+                                    />
+                                    <label
+                                      htmlFor={`upload-res-${idx}-${itemIdx}`}
+                                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-[10px] font-black rounded-lg transition-all cursor-pointer inline-flex items-center gap-1 shadow-sm"
+                                    >
+                                      <Upload className="h-3.5 w-3.5" /> Select File
+                                    </label>
+                                    {item.pdfName && !item.pdfUrl?.startsWith('http') ? (
+                                      <span className="text-[10px] font-bold text-slate-600 truncate max-w-[200px]" title={item.pdfName}>
+                                        📎 {item.pdfName}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[9px] font-bold text-slate-400 italic">No file selected</span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="text-[8px] font-bold text-slate-450 uppercase block">Or External Link URL</label>
+                                  <div className="flex items-center gap-2">
+                                    <Link2 className="h-4.5 w-4.5 text-slate-400 shrink-0" />
+                                    <input
+                                      type="text"
+                                      value={item.pdfUrl?.startsWith('http') ? item.pdfUrl : ''}
+                                      onChange={e => {
+                                        const val = e.target.value;
+                                        handleUpdateSyllabusItem(idx, itemIdx, 'pdfUrl', val);
+                                        handleUpdateSyllabusItem(idx, itemIdx, 'pdfName', val ? 'External Web Link' : '');
+                                      }}
+                                      placeholder="e.g. https://example.com/lecture-slides"
+                                      className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 focus:border-[#4F3FF0] rounded-xl text-xs font-bold outline-none"
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             )}
@@ -1232,13 +1303,6 @@ export const StudentCourseDetail: React.FC = () => {
                                   className="px-3.5 py-1.5 border border-slate-200 hover:border-slate-350 bg-white hover:bg-slate-50 text-slate-750 text-[10.5px] font-black rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-sm"
                                 >
                                   ⚙️ Edit settings (modal)
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => navigate(`${pathPrefix}/courses/${courseId || 'crs0001'}/sections/${idx}/assignments/${item.id}/edit`)}
-                                  className="px-3.5 py-1.5 border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-50 text-[#4F3FF0] hover:text-[#3D2ED0] text-[10.5px] font-black rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-sm"
-                                >
-                                  📄 Go to page
                                 </button>
                                 {item.deadline && (
                                   <div className="w-full text-[9.5px] font-bold text-indigo-500 mt-1">
@@ -1267,6 +1331,20 @@ export const StudentCourseDetail: React.FC = () => {
 
                     {/* Quick Add Buttons */}
                     <div className="flex flex-wrap gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => handleAddSyllabusItem(idx, 'resource')}
+                        className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/50 text-[9px] font-black rounded-lg transition-all cursor-pointer inline-flex items-center gap-0.5"
+                      >
+                        <Plus className="h-3 w-3" /> Add Resource / Link
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAddSyllabusItem(idx, 'assignment')}
+                        className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/50 text-[9px] font-black rounded-lg transition-all cursor-pointer inline-flex items-center gap-0.5"
+                      >
+                        <Plus className="h-3 w-3" /> Add Assignment
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleAddSyllabusItem(idx, 'quiz')}
@@ -1377,7 +1455,7 @@ export const StudentCourseDetail: React.FC = () => {
                                     </div>
                                   )}
                                   {item.type === 'quiz' && (
-                                    <p className="text-[10px] font-bold text-slate-450 uppercase">Questions: {item.questionsCount || 10}</p>
+                                  <p className="text-[10px] font-bold text-slate-450 uppercase">Questions: {item.questionsCount || 10}</p>
                                   )}
                                 </div>
                               </div>
@@ -1385,12 +1463,13 @@ export const StudentCourseDetail: React.FC = () => {
                               <div className="w-full md:w-auto shrink-0 flex flex-col items-end gap-2">
                                 {item.type === 'resource' && item.pdfUrl && (
                                   <a
-                                    href={item.pdfUrl.startsWith('data:') ? item.pdfUrl : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}${item.pdfUrl}`}
+                                    href={item.pdfUrl.startsWith('data:') || item.pdfUrl.startsWith('http') ? item.pdfUrl : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}${item.pdfUrl}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="w-full md:w-auto px-4 py-2 border border-slate-200 hover:border-slate-350 hover:bg-slate-100 text-slate-650 text-[10px] font-black rounded-xl transition-all inline-flex items-center justify-center gap-1.5 cursor-pointer"
                                   >
-                                    <Eye className="h-3.5 w-3.5 text-slate-500" /> View PDF
+                                    {item.pdfUrl.startsWith('http') ? <ExternalLink className="h-3.5 w-3.5 text-slate-500" /> : <Eye className="h-3.5 w-3.5 text-slate-500" />}
+                                    {item.pdfUrl.startsWith('http') ? 'Open Link' : 'view document'}
                                   </a>
                                 )}
 
@@ -1420,7 +1499,7 @@ export const StudentCourseDetail: React.FC = () => {
                                                   className="px-3 py-1 border border-slate-200 hover:border-[#4F3FF0]/20 hover:bg-[#4F3FF0]/5 text-slate-650 hover:text-[#4F3FF0] text-[9.5px] font-black rounded-lg transition-all inline-flex items-center justify-center gap-1 cursor-pointer shadow-xs"
                                                   title={`View ${file.name}`}
                                                 >
-                                                  <Eye className="h-3 w-3" /> {file.name.length > 20 ? `${file.name.substring(0, 18)}...` : file.name}
+                                                  <Eye className="h-3 w-3" /> view document
                                                 </a>
                                               ));
                                             } catch (e) {
@@ -1434,7 +1513,7 @@ export const StudentCourseDetail: React.FC = () => {
                                               rel="noopener noreferrer"
                                               className="px-3.5 py-1.5 border border-slate-200 hover:border-slate-350 hover:bg-slate-100 text-slate-650 text-[10px] font-black rounded-xl transition-all inline-flex items-center justify-center gap-1 cursor-pointer"
                                             >
-                                              <Eye className="h-3.5 w-3.5 text-slate-500" /> View PDF
+                                              <Eye className="h-3.5 w-3.5 text-slate-500" /> view document
                                             </a>
                                           );
                                         })()}
@@ -2407,7 +2486,7 @@ export const StudentCourseDetail: React.FC = () => {
                             className="inline-flex items-center gap-1 bg-white border border-slate-200 hover:border-[#4F3FF0] hover:text-[#4F3FF0] px-2.5 py-1 rounded-lg text-[10.5px] font-black transition-colors"
                           >
                             <FileText className="h-3.5 w-3.5 text-rose-500 shrink-0" />
-                            {file.name}
+                            view document
                           </a>
                         ));
                       } catch (e) {}
@@ -2420,7 +2499,7 @@ export const StudentCourseDetail: React.FC = () => {
                         className="inline-flex items-center gap-1 bg-white border border-slate-200 hover:border-[#4F3FF0] hover:text-[#4F3FF0] px-2.5 py-1 rounded-lg text-[10.5px] font-black transition-colors"
                       >
                         <FileText className="h-3.5 w-3.5 text-rose-505 shrink-0" />
-                        {adminActiveItem.pdfName || 'Assignment PDF'}
+                        view document
                       </a>
                     );
                   })()}
@@ -2437,23 +2516,6 @@ export const StudentCourseDetail: React.FC = () => {
                 className="px-5 py-2.5 bg-[#4F3FF0] hover:bg-[#3D2ED0] text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-sm shadow-[#4F3FF0]/10"
               >
                 View all submissions
-              </button>
-              <button
-                onClick={() => {
-                  if (adminStudents.length > 0) {
-                    const firstStudent = adminStudents[0];
-                    setAdminActiveStudent(firstStudent);
-                    const sub = adminSubmissions.find(s => s.studentId === firstStudent.userId);
-                    setGradeInput(sub?.marks !== undefined && sub?.marks !== null ? sub.marks.toString() : '');
-                    setFeedbackInput(sub?.feedback || '');
-                    setAdminGradeStudentModalOpen(true);
-                  } else {
-                    toast.error('No students enrolled in this course.');
-                  }
-                }}
-                className="px-5 py-2.5 bg-[#4F3FF0] hover:bg-[#3D2ED0] text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-sm shadow-[#4F3FF0]/10"
-              >
-                Grade
               </button>
             </div>
 
@@ -2484,7 +2546,7 @@ export const StudentCourseDetail: React.FC = () => {
                       <td className="p-3">
                         {(() => {
                           const info = calculateTimeRemainingBeforeSubmit(adminActiveItemDetails?.dueDate || adminActiveItem.deadline, adminActiveItemDetails?.dueDate ? undefined : adminActiveItem.deadlineTime);
-                          return info.isOverdue ? 'Assignment is due' : info.text;
+                          return info.text;
                         })()}
                       </td>
                     </tr>

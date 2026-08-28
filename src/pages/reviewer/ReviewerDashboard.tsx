@@ -3,11 +3,16 @@ import {
   UserCheck, 
   Trophy, 
   ArrowRight,
-  Loader2
+  Loader2,
+  BookOpen,
+  Calendar,
+  Bookmark,
+  ChevronRight
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/utils/api';
+import { courseService } from '@/services/courseService';
 
 export const ReviewerDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -18,13 +23,17 @@ export const ReviewerDashboard: React.FC = () => {
     reviewedCount: 0,
     overridesApplied: 0
   });
+  const [assignedCourses, setAssignedCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchDashboardData = async () => {
       try {
         setLoading(true);
-        const data = await api.get<any>('/api/v1/reviewers/dashboard/stats');
+        if (!user?.email) return;
+
+        // Fetch stats
+        const data = await api.get<any>('/api/v1/reviewers/dashboard/stats').catch(() => null);
         if (data) {
           setStats({
             pendingReviews: data.pendingReviews || 0,
@@ -32,14 +41,22 @@ export const ReviewerDashboard: React.FC = () => {
             overridesApplied: data.overridesApplied || 0
           });
         }
+
+        // Fetch assigned courses
+        const grants = await api.get<any[]>(`/api/v1/course-access-grants?email=${user.email}`).catch(() => []);
+        const allCourses = await courseService.getCourses().catch(() => []);
+        const assigned = allCourses.filter((c: any) => 
+          grants.some((g: any) => g.courseId.toLowerCase() === c.courseId.toLowerCase())
+        );
+        setAssignedCourses(assigned);
       } catch (err) {
-        console.error('Error fetching reviewer stats:', err);
+        console.error('Error fetching reviewer dashboard data:', err);
       } finally {
         setLoading(false);
       }
     };
-    fetchStats();
-  }, []);
+    fetchDashboardData();
+  }, [user]);
 
   if (loading) {
     return (
@@ -120,7 +137,7 @@ export const ReviewerDashboard: React.FC = () => {
 
         <div className="bg-white border border-[#E9EDF5] p-6 rounded-2xl shadow-sm space-y-4">
           <h3 className="text-sm font-extrabold text-slate-800 font-heading">Level Threshold Parameters</h3>
-          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+          <p className="text-xs text-slate-505 font-semibold leading-relaxed">
             Modify L1-L7 dynamic thresholds, learning descriptions, hex colors, and coordinate overrides rules.
           </p>
           <button
@@ -131,6 +148,71 @@ export const ReviewerDashboard: React.FC = () => {
             <ArrowRight className="h-4.5 w-4.5" />
           </button>
         </div>
+      </div>
+
+      {/* Assigned Course Modules Grid */}
+      <div className="bg-white border border-[#E9EDF5] p-6 rounded-3xl shadow-sm space-y-5 text-left">
+        <div>
+          <h3 className="text-sm font-black text-slate-805 tracking-tight flex items-center gap-2">
+            <BookOpen className="h-4.5 w-4.5 text-[#4F3FF0]" />
+            Permitted Course Modules
+          </h3>
+          <p className="text-slate-505 text-[10px] font-medium mt-0.5">
+            Select an assigned module to review student portfolio templates, curriculum tracks, and syllabus files.
+          </p>
+        </div>
+
+        {assignedCourses.length === 0 ? (
+          <div className="text-center py-10 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+            <p className="text-slate-405 font-extrabold text-xs">No active module access grants found</p>
+            <p className="text-slate-405 text-[10px] mt-0.5 font-medium">Please contact admin to request module access permissions.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {assignedCourses.map(course => (
+              <div 
+                key={course.courseId}
+                onClick={() => navigate(`/reviewer/courses/${course.courseId}`)}
+                className="bg-white border border-[#E9EDF5] hover:border-slate-350 rounded-2xl p-4.5 flex flex-col justify-between transition-all duration-200 cursor-pointer shadow-xs hover:shadow-md hover:-translate-y-0.5 group"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[8px] font-black text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      {course.level || 'Level 1'}
+                    </span>
+                    {course.isCompulsory !== false && (
+                      <span className="text-[8px] font-black text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                        Compulsory
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-850 leading-snug group-hover:text-[#4F3FF0] transition-colors line-clamp-1">
+                      {course.courseName}
+                    </h4>
+                    <p className="text-[9px] text-slate-400 font-mono mt-0.5">{course.courseId}</p>
+                  </div>
+                  <p className="text-slate-455 text-[10px] font-semibold leading-relaxed line-clamp-2">
+                    {course.description || 'No course overview description provided.'}
+                  </p>
+                </div>
+                <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between text-[9px] font-bold text-slate-450">
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3 shrink-0" />
+                      {course.durationWeeks || '12'} Weeks
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Bookmark className="h-3 w-3 shrink-0" />
+                      {course.credits || '3'} Credits
+                    </span>
+                  </div>
+                  <ChevronRight className="h-3.5 w-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
     </div>

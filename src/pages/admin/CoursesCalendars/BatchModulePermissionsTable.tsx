@@ -1,21 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Trash2 } from 'lucide-react';
-
-interface PermissionRow {
-  courseId: string;
-  courseName: string;
-  batchId: string;
-  batchName: string;
-  accessType: 'Standard' | 'Custom';
-  studentCount: number;
-  grantedAt: string;
-}
-
-interface BatchModulePermissionsTableProps {
-  permissions: PermissionRow[];
-  courses: any[];
-  onRevoke: (row: PermissionRow) => void;
-}
+import type { BatchModulePermissionsTableProps } from './types';
 
 export const BatchModulePermissionsTable: React.FC<BatchModulePermissionsTableProps> = ({
   permissions,

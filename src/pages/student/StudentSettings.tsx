@@ -105,7 +105,7 @@ export const StudentSettings: React.FC = () => {
               onClick={() => setIsPasswordModalOpen(true)}
               className="text-xs font-bold text-[#4F3FF0] hover:underline cursor-pointer bg-none border-none p-0"
             >
-              Edit profile
+              Reset password
             </button>
           </div>
 
@@ -121,6 +121,16 @@ export const StudentSettings: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5 text-slate-700 text-xs">
+              <div className="space-y-1.5 md:col-span-2 text-left border-b border-slate-100 pb-4 flex items-center gap-4">
+                <div className="h-12 w-12 bg-indigo-50 text-[#4F3FF0] rounded-2xl flex items-center justify-center border border-indigo-100 shrink-0">
+                  <User className="h-6 w-6" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-slate-850">{profile?.fullName || user?.fullName || 'Student'}</h4>
+                  <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wide">STUDENT</span>
+                </div>
+              </div>
+
               <div className="space-y-1.5 md:col-span-2 text-left">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Email address</span>
                 <div className="leading-relaxed">
@@ -129,6 +139,11 @@ export const StudentSettings: React.FC = () => {
                     (Hidden from everyone except users with appropriate permissions)
                   </span>
                 </div>
+              </div>
+
+              <div className="space-y-1.5 text-left">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Phone Number</span>
+                <span className="font-extrabold text-slate-800">{profile?.phone || 'Not Provided'}</span>
               </div>
 
               <div className="space-y-1.5 text-left">
@@ -166,6 +181,22 @@ export const StudentSettings: React.FC = () => {
               <div className="space-y-1.5 text-left">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Timezone</span>
                 <span className="font-extrabold text-slate-800">Asia/Colombo</span>
+              </div>
+
+              <div className="md:col-span-2 border-t border-slate-100 pt-4 mt-2 text-left space-y-3">
+                <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-wider select-none">
+                  Guardian / Parent details
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Guardian Name</span>
+                    <span className="font-extrabold text-slate-800">{profile?.guardianName || 'Not Provided'}</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Guardian Email</span>
+                    <span className="font-extrabold text-[#4F3FF0]">{profile?.guardianEmail || 'Not Provided'}</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}

@@ -5,7 +5,8 @@ import {
   BookOpen, 
   Trophy, 
   Settings,
-  Shield
+  Shield,
+  Award
 } from 'lucide-react';
 
 const studentSidebarGroups: SidebarGroup[] = [
@@ -19,6 +20,7 @@ const studentSidebarGroups: SidebarGroup[] = [
     category: 'Academics & Progress',
     links: [
       { label: 'My Academics', path: '/student/academics', icon: BookOpen },
+      { label: 'My Grades & Marks', path: '/student/grades', icon: Award },
       { label: 'Career Scale', path: '/student/career', icon: Trophy },
     ]
   },

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { 
   Plus, 
@@ -21,11 +21,22 @@ import { toast } from '@/utils/toast';
 export const ExamListPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const tabParam = queryParams.get('tab')?.toUpperCase();
   const pathPrefix = user?.role?.toUpperCase() === 'TEACHER' ? '/teacher' : '/admin';
   const [exams, setExams] = useState<any[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'DRAFT' | 'PUBLISHED' | 'CLOSED'>('DRAFT');
+  const [activeTab, setActiveTab] = useState<'DRAFT' | 'PUBLISHED' | 'CLOSED'>(
+    (tabParam === 'DRAFT' || tabParam === 'PUBLISHED' || tabParam === 'CLOSED') ? tabParam : 'DRAFT'
+  );
+
+  useEffect(() => {
+    if (tabParam === 'DRAFT' || tabParam === 'PUBLISHED' || tabParam === 'CLOSED') {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;

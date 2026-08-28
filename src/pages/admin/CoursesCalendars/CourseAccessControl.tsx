@@ -7,45 +7,8 @@ import { studentService } from '@/services/studentService';
 import { courseAccessService } from '@/services/courseAccessService';
 import { api } from '@/utils/api';
 import { toast } from '@/utils/toast';
-import { BatchModulePermissionsTable } from './BatchModulePermissionsTable';
 import Swal from 'sweetalert2';
-
-interface Course {
-  courseId: string;
-  courseName: string;
-}
-
-interface Batch {
-  batchId: string;
-  batchName: string;
-  startDate?: string;
-  courses?: Course[];
-}
-
-interface Student {
-  studentId: string;
-  fullName: string;
-  email: string;
-  regNo?: string;
-  currentBatchId?: string;
-}
-
-interface Enrollment {
-  id: string;
-  studentId: string;
-  courseId: string;
-  batchId: string;
-  enrollmentDate?: string;
-}
-
-interface AccessGrant {
-  id: string;
-  courseId: string;
-  courseName: string;
-  batchCode: string; // holds batchId/batchName or 'TEACHER'/'REVIEWER'
-  userIdentifier: string; // email
-  grantedAt: string;
-}
+import type { Course, Batch, Student, Enrollment, AccessGrant } from './types';
 
 export const CourseAccessControl: React.FC = () => {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -55,6 +18,7 @@ export const CourseAccessControl: React.FC = () => {
 
   const [batches, setBatches] = useState<Batch[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState('');
+  const [selectedCourseBatchName, setSelectedCourseBatchName] = useState<string | null>(null);
   const [batchCoursesMap, setBatchCoursesMap] = useState<{ [batchId: string]: Course[] }>({});
   
   const [students, setStudents] = useState<Student[]>([]);
@@ -70,6 +34,8 @@ export const CourseAccessControl: React.FC = () => {
   
   const [loading, setLoading] = useState(true);
   const [targetRole, setTargetRole] = useState<'STUDENT' | 'TEACHER' | 'REVIEWER'>('STUDENT');
+  const [activeSubTab, setActiveSubTab] = useState<'grant' | 'roster'>('grant');
+  const [rosterRoleFilter, setRosterRoleFilter] = useState<'ALL' | 'Student' | 'Teacher' | 'Reviewer'>('ALL');
 
   const courseDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -152,6 +118,7 @@ export const CourseAccessControl: React.FC = () => {
 
     if (assignedBatches.length > 0) {
       setSelectedBatchId(assignedBatches[0].batchId);
+      setSelectedCourseBatchName(assignedBatches[0].batchName);
       return;
     }
 
@@ -161,6 +128,7 @@ export const CourseAccessControl: React.FC = () => {
 
     if (assignedBatchesFallback.length > 0) {
       setSelectedBatchId(assignedBatchesFallback[0].batchId);
+      setSelectedCourseBatchName(assignedBatchesFallback[0].batchName);
       return;
     }
 
@@ -170,6 +138,7 @@ export const CourseAccessControl: React.FC = () => {
     const assignedByEnrollment = allBatches.filter(b => enrolledBatchIds.has(b.batchId));
     if (assignedByEnrollment.length > 0) {
       setSelectedBatchId(assignedByEnrollment[0].batchId);
+      setSelectedCourseBatchName(assignedByEnrollment[0].batchName);
       return;
     }
 
@@ -181,11 +150,25 @@ export const CourseAccessControl: React.FC = () => {
     );
     if (assignedByGrant.length > 0) {
       setSelectedBatchId(assignedByGrant[0].batchId);
+      setSelectedCourseBatchName(assignedByGrant[0].batchName);
+      return;
+    }
+
+    const assignedByDirect = allBatches.filter(b => {
+      const targetCourse = courses.find(c => c.courseId === courseId);
+      if (!targetCourse?.batchCode) return false;
+      return targetCourse.batchCode.toLowerCase().split(',').map(s => s.trim()).includes(b.batchName.toLowerCase()) ||
+             targetCourse.batchCode.toLowerCase().split(',').map(s => s.trim()).includes(b.batchId.toLowerCase());
+    });
+    if (assignedByDirect.length > 0) {
+      setSelectedBatchId(assignedByDirect[0].batchId);
+      setSelectedCourseBatchName(assignedByDirect[0].batchName);
       return;
     }
 
     if (allBatches.length > 0) {
       setSelectedBatchId(allBatches[0].batchId);
+      setSelectedCourseBatchName(allBatches[0].batchName);
     }
   };
 
@@ -199,6 +182,8 @@ export const CourseAccessControl: React.FC = () => {
       batchName: string | null;
       displayName: string;
     }> = [];
+
+    const seenDisplayNames = new Set<string>();
 
     courses.forEach(course => {
       const assignedBatches: Batch[] = [];
@@ -217,7 +202,12 @@ export const CourseAccessControl: React.FC = () => {
                 g.batchCode.toLowerCase() === batch.batchName.toLowerCase())
         );
 
-        if (isStandard || isEnrolled || isGranted) {
+        const isDirectBatch = course.batchCode ? (
+          course.batchCode.toLowerCase().split(',').map((s: string) => s.trim()).includes(batch.batchName.toLowerCase()) ||
+          course.batchCode.toLowerCase().split(',').map((s: string) => s.trim()).includes(batch.batchId.toLowerCase())
+        ) : false;
+
+        if (isStandard || isEnrolled || isGranted || isDirectBatch) {
           assignedBatches.push(batch);
         }
       });
@@ -228,24 +218,32 @@ export const CourseAccessControl: React.FC = () => {
         );
 
         uniqueBatches.forEach(batch => {
-          options.push({
-            key: `${course.courseId}-${batch.batchId}`,
-            courseId: course.courseId,
-            courseName: course.courseName,
-            batchId: batch.batchId,
-            batchName: batch.batchName,
-            displayName: `${course.courseName} - ${batch.batchName}`
-          });
+          const displayName = `${course.courseName} - ${batch.batchName}`;
+          if (!seenDisplayNames.has(displayName.toLowerCase())) {
+            seenDisplayNames.add(displayName.toLowerCase());
+            options.push({
+              key: `${course.courseId}-${batch.batchId}`,
+              courseId: course.courseId,
+              courseName: course.courseName,
+              batchId: batch.batchId,
+              batchName: batch.batchName,
+              displayName: displayName
+            });
+          }
         });
       } else {
-        options.push({
-          key: `${course.courseId}-nobatch`,
-          courseId: course.courseId,
-          courseName: course.courseName,
-          batchId: null,
-          batchName: null,
-          displayName: course.courseName
-        });
+        const displayName = course.courseName;
+        if (!seenDisplayNames.has(displayName.toLowerCase())) {
+          seenDisplayNames.add(displayName.toLowerCase());
+          options.push({
+            key: `${course.courseId}-nobatch`,
+            courseId: course.courseId,
+            courseName: course.courseName,
+            batchId: null,
+            batchName: null,
+            displayName: displayName
+          });
+        }
       }
     });
 
@@ -261,12 +259,11 @@ export const CourseAccessControl: React.FC = () => {
   const selectedCourseName = useMemo(() => {
     const matchedCourse = courses.find(c => c.courseId === selectedCourseId);
     if (!matchedCourse) return 'Select Course Module';
-    const matchedBatch = batches.find(b => b.batchId === selectedBatchId);
-    if (matchedBatch && targetRole === 'STUDENT') {
-      return `${matchedCourse.courseName} - ${matchedBatch.batchName}`;
+    if (selectedCourseBatchName && targetRole === 'STUDENT') {
+      return `${matchedCourse.courseName} - ${selectedCourseBatchName}`;
     }
     return matchedCourse.courseName;
-  }, [courses, selectedCourseId, batches, selectedBatchId, targetRole]);
+  }, [courses, selectedCourseId, selectedCourseBatchName, targetRole]);
 
   // Students enrolled in standard batch
   const batchStudents = useMemo(() => {
@@ -387,81 +384,15 @@ export const CourseAccessControl: React.FC = () => {
   }, [eligibleUsers, studentSearchQuery]);
 
   const filteredUsersWithAccess = useMemo(() => {
-    return usersWithAccess.filter(user =>
-      user.fullName.toLowerCase().includes(accessSearchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(accessSearchQuery.toLowerCase())
-    );
-  }, [usersWithAccess, accessSearchQuery]);
-
-  // Permissions Table Matrix Builder
-  const permissionsMatrix = useMemo(() => {
-    const matrix: any[] = [];
-    const processedKeys = new Set<string>();
-
-    batches.forEach(batch => {
-      if (batch.courses) {
-        batch.courses.forEach(course => {
-          const key = `${course.courseId}-${batch.batchId}-Standard`;
-          if (!processedKeys.has(key)) {
-            processedKeys.add(key);
-            const stdCount = students.filter(s => s.currentBatchId?.toLowerCase() === batch.batchId.toLowerCase()).length;
-            matrix.push({
-              courseId: course.courseId,
-              courseName: course.courseName,
-              batchId: batch.batchId,
-              batchName: batch.batchName,
-              accessType: 'Standard',
-              studentCount: stdCount,
-              grantedAt: batch.startDate || ''
-            });
-          }
-        });
-      }
+    return usersWithAccess.filter(user => {
+      const matchesSearch = user.fullName.toLowerCase().includes(accessSearchQuery.toLowerCase()) ||
+                            user.email.toLowerCase().includes(accessSearchQuery.toLowerCase());
+      const matchesRole = rosterRoleFilter === 'ALL' || user.role === rosterRoleFilter;
+      return matchesSearch && matchesRole;
     });
+  }, [usersWithAccess, accessSearchQuery, rosterRoleFilter]);
 
-    grants.forEach(grant => {
-      const targetBatch = batches.find(b => b.batchName.toLowerCase() === grant.batchCode.toLowerCase() || b.batchId.toLowerCase() === grant.batchCode.toLowerCase());
-      if (targetBatch) {
-        const key = `${grant.courseId}-${targetBatch.batchId}-Custom`;
-        if (!processedKeys.has(key)) {
-          processedKeys.add(key);
-          const customCount = grants.filter(g => 
-            g.courseId === grant.courseId && 
-            (g.batchCode.toLowerCase() === targetBatch.batchName.toLowerCase() || g.batchCode.toLowerCase() === targetBatch.batchId.toLowerCase())
-          ).length;
 
-          matrix.push({
-            courseId: grant.courseId,
-            courseName: grant.courseName,
-            batchId: targetBatch.batchId,
-            batchName: targetBatch.batchName,
-            accessType: 'Custom',
-            studentCount: customCount,
-            grantedAt: grant.grantedAt
-          });
-        }
-      } else {
-        if (grant.batchCode === 'TEACHER' || grant.batchCode === 'REVIEWER') {
-          const key = `${grant.courseId}-${grant.batchCode}-Staff`;
-          if (!processedKeys.has(key)) {
-            processedKeys.add(key);
-            const staffCount = grants.filter(g => g.courseId === grant.courseId && g.batchCode === grant.batchCode).length;
-            matrix.push({
-              courseId: grant.courseId,
-              courseName: grant.courseName,
-              batchId: grant.batchCode,
-              batchName: grant.batchCode === 'TEACHER' ? 'Teaching Staff' : 'Reviewer Staff',
-              accessType: 'Custom',
-              studentCount: staffCount,
-              grantedAt: grant.grantedAt
-            });
-          }
-        }
-      }
-    });
-
-    return matrix;
-  }, [batches, grants, students]);
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -549,94 +480,40 @@ export const CourseAccessControl: React.FC = () => {
     });
   };
 
-  // Revoke matrix row access (Standard curriculum vs Custom grants)
-  const handleRevokeMatrix = async (row: any) => {
-    if (row.accessType === 'Standard') {
-      const confirmText = `Are you sure you want to revoke standard curriculum access for course "${row.courseName}" from batch "${row.batchName}"? This affects every student enrolled in this batch and removes the module assignment.`;
-      
-      Swal.fire({
-        title: 'Revoke Standard Curriculum?',
-        html: `<div class="text-left text-xs font-semibold text-slate-500 leading-relaxed mt-2">${confirmText}</div>`,
-        showCancelButton: true,
-        confirmButtonText: 'Yes, revoke standard access',
-        cancelButtonText: 'Cancel',
-        buttonsStyling: false,
-        customClass: {
-          popup: 'rounded-3xl border border-[#E9EDF5] bg-white shadow-2xl p-6 font-sans w-full max-w-md relative text-left',
-          title: 'text-left font-black text-slate-805 text-sm tracking-tight border-b border-slate-100 pb-3 block w-full',
-          htmlContainer: 'block text-left mb-0',
-          actions: 'flex gap-3 justify-end pt-3 mt-4 border-t border-slate-100 w-full',
-          confirmButton: 'py-2 px-4 bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold rounded-xl transition-all cursor-pointer shadow-md shadow-rose-600/10',
-          cancelButton: 'py-2 px-4 border border-[#E2E8F0] hover:bg-slate-50 text-slate-750 font-extrabold text-xs rounded-xl cursor-pointer transition-all'
-        }
-      }).then(async (result) => {
-        if (result.isConfirmed) {
-          try {
-            setLoading(true);
-            const batchData = await api.get<any>(`/api/v1/batches/${row.batchId}`);
-            if (batchData) {
-              batchData.courses = (batchData.courses || []).filter((c: any) => c.courseId.toLowerCase() !== row.courseId.toLowerCase());
-              await batchService.updateBatch(row.batchId, batchData);
-              setBatches(prev => prev.map(b => b.batchId === row.batchId ? { ...b, courses: batchData.courses } : b));
-              toast.success(`Standard curriculum access successfully revoked for batch "${row.batchName}".`);
-            }
-          } catch (err) {
-            console.error(err);
-            toast.error('Failed to revoke standard batch course access.');
-          } finally {
-            setLoading(false);
-          }
-        }
-      });
-    } else {
-      const confirmText = `Are you sure you want to revoke all custom grants for course "${row.courseName}" from ${row.batchName}?`;
-      
-      Swal.fire({
-        title: 'Revoke Custom Grants?',
-        html: `<div class="text-left text-xs font-semibold text-slate-500 leading-relaxed mt-2">${confirmText}</div>`,
-        showCancelButton: true,
-        confirmButtonText: 'Yes, revoke all grants',
-        cancelButtonText: 'Cancel',
-        buttonsStyling: false,
-        customClass: {
-          popup: 'rounded-3xl border border-[#E9EDF5] bg-white shadow-2xl p-6 font-sans w-full max-w-md relative text-left',
-          title: 'text-left font-black text-slate-805 text-sm tracking-tight border-b border-slate-100 pb-3 block w-full',
-          htmlContainer: 'block text-left mb-0',
-          actions: 'flex gap-3 justify-end pt-3 mt-4 border-t border-slate-100 w-full',
-          confirmButton: 'py-2 px-4 bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold rounded-xl transition-all cursor-pointer shadow-md shadow-rose-600/10',
-          cancelButton: 'py-2 px-4 border border-[#E2E8F0] hover:bg-slate-50 text-slate-750 font-extrabold text-xs rounded-xl cursor-pointer transition-all'
-        }
-      }).then(async (result) => {
-        if (result.isConfirmed) {
-          try {
-            setLoading(true);
-            const targetGrants = grants.filter(g => 
-              g.courseId === row.courseId && 
-              (g.batchCode.toLowerCase() === row.batchId.toLowerCase() || g.batchCode.toLowerCase() === row.batchName.toLowerCase())
-            );
-            
-            await Promise.all(targetGrants.map(g => courseAccessService.revokeAccess(g.id)));
-            setGrants(prev => prev.filter(g => !targetGrants.some(tg => tg.id === g.id)));
-            toast.success(`Custom grants successfully revoked for "${row.batchName}".`);
-          } catch (err) {
-            console.error(err);
-            toast.error('Failed to revoke custom grants.');
-          } finally {
-            setLoading(false);
-          }
-        }
-      });
-    }
-  };
+
 
   return (
     <div className="space-y-6 font-sans">
       
-      {/* Access Control Workspaces Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
-        
-        {/* Left Column - Large Grant Access Panel */}
-        <div className="lg:col-span-3 bg-white border border-[#E9EDF5] rounded-3xl p-6 shadow-sm space-y-5 text-left flex flex-col min-h-[500px]">
+      {/* Sub-tabs Navigation */}
+      <div className="bg-[#F8FAFC] border border-[#E2E8F0] p-1.5 rounded-2xl flex items-center gap-4 flex-wrap max-w-max select-none font-sans font-bold text-xs">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('grant')}
+          className={`px-4 py-2 rounded-xl transition-all cursor-pointer ${
+            activeSubTab === 'grant'
+              ? 'bg-white border border-[#E2E8F0] text-slate-800 shadow-sm font-extrabold'
+              : 'text-slate-450 hover:text-slate-700'
+          }`}
+        >
+          Grant Course Access
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('roster')}
+          className={`px-4 py-2 rounded-xl transition-all cursor-pointer ${
+            activeSubTab === 'roster'
+              ? 'bg-white border border-[#E2E8F0] text-slate-800 shadow-sm font-extrabold'
+              : 'text-slate-455 hover:text-slate-700'
+          }`}
+        >
+          Module Access Roster
+        </button>
+      </div>
+
+      {activeSubTab === 'grant' ? (
+        /* Grant Access Panel (Full Width) */
+        <div className="bg-white border border-[#E9EDF5] rounded-3xl p-6 shadow-sm space-y-5 text-left flex flex-col min-h-[500px]">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider flex items-center gap-2 select-none">
@@ -657,7 +534,7 @@ export const CourseAccessControl: React.FC = () => {
                 }}
                 className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
                   targetRole === 'STUDENT'
-                    ? 'bg-white border border-[#E2E8F0] text-slate-850 shadow-xs font-black'
+                    ? 'bg-white border border-[#E2E8F0] text-slate-855 shadow-xs font-black'
                     : 'text-slate-400 hover:text-slate-700'
                 }`}
               >
@@ -672,7 +549,7 @@ export const CourseAccessControl: React.FC = () => {
                 }}
                 className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
                   targetRole === 'TEACHER'
-                    ? 'bg-white border border-[#E2E8F0] text-slate-850 shadow-xs font-black'
+                    ? 'bg-white border border-[#E2E8F0] text-slate-855 shadow-xs font-black'
                     : 'text-slate-400 hover:text-slate-700'
                 }`}
               >
@@ -687,7 +564,7 @@ export const CourseAccessControl: React.FC = () => {
                 }}
                 className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
                   targetRole === 'REVIEWER'
-                    ? 'bg-white border border-[#E2E8F0] text-slate-850 shadow-xs font-black'
+                    ? 'bg-white border border-[#E2E8F0] text-slate-855 shadow-xs font-black'
                     : 'text-slate-400 hover:text-slate-700'
                 }`}
               >
@@ -723,7 +600,7 @@ export const CourseAccessControl: React.FC = () => {
                           onChange={(e) => setCourseSearchQuery(e.target.value)}
                           placeholder="Search modules..."
                           onClick={(e) => e.stopPropagation()}
-                          className="w-full pl-8.5 pr-3 py-2 bg-white border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-lg text-xs font-bold text-slate-700 placeholder-slate-400 outline-none"
+                          className="w-full pl-8.5 pr-3 py-2 bg-white border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-lg text-xs font-bold text-slate-707 placeholder-slate-400 outline-none"
                         />
                       </div>
                     </div>
@@ -740,12 +617,15 @@ export const CourseAccessControl: React.FC = () => {
                                 setSelectedCourseId(opt.courseId);
                                 if (opt.batchId) {
                                   setSelectedBatchId(opt.batchId);
+                                  setSelectedCourseBatchName(opt.batchName);
+                                } else {
+                                  setSelectedCourseBatchName(null);
                                 }
                                 setSelectedUserEmails([]);
                                 setCourseSearchQuery('');
                                 setIsCourseDropdownOpen(false);
                               }}
-                              className={`flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 cursor-pointer transition-colors ${isSelected ? 'bg-[#4F3FF0]/5 text-[#4F3FF0] font-black' : 'text-slate-700 font-bold'}`}
+                              className={`flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 cursor-pointer transition-colors ${isSelected ? 'bg-[#4F3FF0]/5 text-[#4F3FF0] font-black' : 'text-slate-707 font-bold'}`}
                             >
                               <span className="truncate pr-4 text-xs">{opt.displayName}</span>
                               {isSelected && <Check className="h-4 w-4 shrink-0" />}
@@ -802,7 +682,7 @@ export const CourseAccessControl: React.FC = () => {
                     disabled={eligibleUsers.length === 0}
                     className="h-4.5 w-4.5 rounded border-slate-350 text-[#4F3FF0] focus:ring-[#4F3FF0] cursor-pointer disabled:cursor-not-allowed shrink-0"
                   />
-                  <label htmlFor="selectAllCheckbox" className="text-xs font-black text-slate-700 cursor-pointer select-none">
+                  <label htmlFor="selectAllCheckbox" className="text-xs font-black text-slate-707 cursor-pointer select-none">
                     Select All ({selectedUserEmails.length} selected)
                   </label>
                 </div>
@@ -817,7 +697,7 @@ export const CourseAccessControl: React.FC = () => {
                     placeholder="Search name or email..."
                     value={studentSearchQuery}
                     onChange={e => setStudentSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] focus:bg-white rounded-xl text-xs font-bold text-slate-700 placeholder-slate-400 outline-none transition-colors"
+                    className="w-full pl-9 pr-4 py-2 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] focus:bg-white rounded-xl text-xs font-bold text-slate-707 placeholder-slate-400 outline-none transition-colors"
                   />
                 </div>
               </div>
@@ -908,115 +788,227 @@ export const CourseAccessControl: React.FC = () => {
             </div>
           </form>
         </div>
-
-        {/* Right Column - Secondary Module Access List */}
-        <div className="lg:col-span-2 bg-white border border-[#E9EDF5] rounded-3xl p-6 shadow-sm text-left flex flex-col min-h-[500px]">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div>
-              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">
-                Module Access Roster
-              </h3>
-              <p className="text-slate-505 text-[10px] font-medium mt-0.5">
-                Active students, teachers, and reviewers holding course permissions.
-              </p>
-            </div>
-            <span className="text-[#4F3FF0] text-[10px] font-black px-2.5 py-1 bg-[#4F3FF0]/10 rounded-xl shrink-0 select-none">
-              {usersWithAccess.length} Users
-            </span>
-          </div>
-
-          {/* Search bar for access list */}
-          {usersWithAccess.length > 0 && (
-            <div className="relative mt-4 mb-3">
-              <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
-                <Search className="h-3.5 w-3.5" />
-              </span>
-              <input
-                type="text"
-                placeholder="Search active users..."
-                value={accessSearchQuery}
-                onChange={e => setAccessSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-xs font-bold text-slate-700 placeholder-slate-400 outline-none transition-colors"
-              />
-            </div>
-          )}
-
-          {loading ? (
-            <div className="flex-1 flex items-center justify-center font-bold text-slate-400 text-xs uppercase tracking-wider">
-              Loading access database...
-            </div>
-          ) : filteredUsersWithAccess.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-center py-12 space-y-2.5 select-none">
-              <div className="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400">
-                <Key className="h-5 w-5" />
-              </div>
+      ) : (
+        /* Roster & Curriculum Permissions Panel (Tab 2) */
+        <div className="space-y-6">
+          <div className="bg-white border border-[#E9EDF5] rounded-3xl p-6 shadow-sm text-left flex flex-col space-y-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
               <div>
-                <p className="text-slate-400 font-extrabold text-xs">No active access records</p>
-                <p className="text-slate-400 font-medium text-[9px] mt-0.5 leading-relaxed max-w-[200px]">Enrolled curriculum defaults and custom access grants will show here.</p>
+                <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">
+                  Module Access Roster
+                </h3>
+                <p className="text-slate-505 text-[10px] font-medium mt-0.5">
+                  Active students, teachers, and reviewers holding course permissions.
+                </p>
               </div>
+              <span className="text-[#4F3FF0] text-[10px] font-black px-2.5 py-1 bg-[#4F3FF0]/10 rounded-xl shrink-0 select-none max-w-max">
+                {usersWithAccess.length} Active Users
+              </span>
             </div>
-          ) : (
-            <div className="overflow-y-auto max-h-[360px] flex-1 space-y-3.5 pr-1 py-1">
-              {filteredUsersWithAccess.map(user => (
-                <div
-                  key={`${user.id}-${user.role}-${user.accessType}`}
-                  className="bg-white border border-[#E9EDF5] hover:border-slate-350 rounded-2xl p-4 flex flex-col justify-between transition-colors shadow-sm"
+
+            {/* Filter controls inside Roster */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+              
+              {/* Searchable Module Combobox */}
+              <div className="space-y-1.5 text-left relative" ref={courseDropdownRef}>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block select-none">Course Module</label>
+                <div 
+                  onClick={() => setIsCourseDropdownOpen(prev => !prev)}
+                  className="w-full flex items-center justify-between pl-4 pr-3.5 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] hover:border-slate-350 focus-within:border-[#4F3FF0] rounded-xl text-xs text-slate-800 font-bold outline-none cursor-pointer select-none transition-all"
                 >
-                  <div className="flex justify-between items-start gap-2.5">
-                    <div className="min-w-0">
-                      <span className="font-extrabold text-slate-800 text-xs block truncate" title={user.fullName}>
-                        {user.fullName}
-                      </span>
-                      <span className="text-[10px] font-medium text-slate-455 block truncate mt-0.5">{user.email}</span>
+                  <span className="truncate">{selectedCourseName}</span>
+                  <ChevronDown className={`h-4.5 w-4.5 text-slate-455 transition-transform ${isCourseDropdownOpen ? 'rotate-180' : ''}`} />
+                </div>
+
+                {isCourseDropdownOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-white border border-[#E2E8F0] rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 flex flex-col max-h-60">
+                    <div className="p-2 border-b border-slate-100 bg-slate-50/50">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-455" />
+                        <input
+                          type="text"
+                          value={courseSearchQuery}
+                          onChange={(e) => setCourseSearchQuery(e.target.value)}
+                          placeholder="Search modules..."
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full pl-8.5 pr-3 py-2 bg-white border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-lg text-xs font-bold text-slate-707 placeholder-slate-400 outline-none"
+                        />
+                      </div>
                     </div>
-                    
-                    <div className="flex flex-col items-end gap-1.5 shrink-0 select-none">
-                      <span className={`px-2 py-0.5 text-[8px] font-black uppercase rounded-full tracking-wider border ${
-                        user.accessType === 'Enrolled (Standard)' 
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-150' 
-                          : 'bg-indigo-50 text-[#4F3FF0] border-indigo-150'
-                      }`}>
-                        {user.accessType === 'Enrolled (Standard)' ? 'Standard' : 'Custom'}
-                      </span>
-                      <span className={`px-2 py-0.5 text-[8px] font-black uppercase rounded-full tracking-wider border ${
-                        user.role === 'Teacher'
-                          ? 'bg-purple-50 text-purple-700 border-purple-150'
-                          : user.role === 'Reviewer'
-                          ? 'bg-amber-50 text-amber-700 border-amber-150'
-                          : 'bg-blue-50 text-blue-700 border-blue-150'
-                      }`}>
-                        {user.role}
-                      </span>
+                    <div className="overflow-y-auto divide-y divide-slate-50 flex-1">
+                      {filteredCourseOptions.length === 0 ? (
+                        <div className="text-center py-6 text-slate-400 text-xs font-semibold select-none">No modules found</div>
+                      ) : (
+                        filteredCourseOptions.map(opt => {
+                          const isSelected = opt.courseId === selectedCourseId && opt.batchId === selectedBatchId;
+                          return (
+                            <div
+                              key={opt.key}
+                              onClick={() => {
+                                setSelectedCourseId(opt.courseId);
+                                if (opt.batchId) {
+                                  setSelectedBatchId(opt.batchId);
+                                }
+                                setSelectedUserEmails([]);
+                                setCourseSearchQuery('');
+                                setIsCourseDropdownOpen(false);
+                              }}
+                              className={`flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 cursor-pointer transition-colors ${isSelected ? 'bg-[#4F3FF0]/5 text-[#4F3FF0] font-black' : 'text-slate-707 font-bold'}`}
+                            >
+                              <span className="truncate pr-4 text-xs">{opt.displayName}</span>
+                              {isSelected && <Check className="h-4 w-4 shrink-0" />}
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   </div>
+                )}
+              </div>
 
-                  {user.accessType === 'Custom Grant' && user.grantId && (
-                    <div className="flex justify-end pt-3 border-t border-slate-100/60 mt-3.5">
-                      <button
-                        type="button"
-                        onClick={() => handleRevokeCustom(user.grantId!, user.fullName)}
-                        className="p-1.5 hover:bg-rose-50 text-slate-455 hover:text-rose-600 rounded-xl transition-colors cursor-pointer inline-flex items-center gap-1 text-[10px] font-black"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" /> Revoke Custom Grant
-                      </button>
-                    </div>
-                  )}
+              {/* Batch Dropdown Selector */}
+              <div className="space-y-1.5 text-left">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block select-none">Select Batch</label>
+                <select
+                  value={selectedBatchId}
+                  onChange={e => {
+                    setSelectedBatchId(e.target.value);
+                    setSelectedUserEmails([]);
+                    setStudentSearchQuery('');
+                    setAccessSearchQuery('');
+                  }}
+                  className="w-full pl-4 pr-10 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] hover:border-slate-350 focus:border-[#4F3FF0] rounded-xl text-xs text-slate-800 font-bold outline-none cursor-pointer focus:bg-white focus:ring-4 focus:ring-[#4F3FF0]/10 transition-all"
+                >
+                  {batches.map(b => (
+                    <option key={b.batchId} value={b.batchId}>
+                      {b.batchName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Role Dropdown Selector */}
+              <div className="space-y-1.5 text-left select-none">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block">Filter by Role</label>
+                <select
+                  value={rosterRoleFilter}
+                  onChange={e => setRosterRoleFilter(e.target.value as any)}
+                  className="w-full pl-4 pr-10 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] hover:border-slate-350 focus:border-[#4F3FF0] rounded-xl text-xs text-slate-800 font-bold outline-none cursor-pointer focus:bg-white focus:ring-4 focus:ring-[#4F3FF0]/10 transition-all"
+                >
+                  <option value="ALL">All Roles</option>
+                  <option value="Student">Students</option>
+                  <option value="Teacher">Teachers</option>
+                  <option value="Reviewer">Reviewers</option>
+                </select>
+              </div>
+
+              {/* Roster Search Input */}
+              <div className="space-y-1.5 text-left">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block select-none">Search Active Users</label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+                    <Search className="h-3.5 w-3.5" />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Search active users by name or email..."
+                    value={accessSearchQuery}
+                    onChange={e => setAccessSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] focus:bg-white rounded-xl text-xs font-bold text-slate-707 placeholder-slate-400 outline-none transition-colors"
+                  />
                 </div>
-              ))}
+              </div>
+
             </div>
-          )}
+
+            {/* Table View of Active Users */}
+            <div className="border border-[#E9EDF5] rounded-2xl overflow-hidden bg-white mt-4">
+              <table className="w-full border-collapse text-left text-xs text-slate-700 font-sans">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-[#E9EDF5] text-slate-455 text-[9.5px] font-black tracking-wider uppercase select-none">
+                    <th className="px-6 py-4">Full Name</th>
+                    <th className="px-6 py-4">Email Address</th>
+                    <th className="px-6 py-4">Role</th>
+                    <th className="px-6 py-4">Access Type</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E9EDF5] font-semibold text-slate-705">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-10 text-center text-slate-400 font-bold">
+                        Loading access database...
+                      </td>
+                    </tr>
+                  ) : filteredUsersWithAccess.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-16 text-center text-slate-400 select-none">
+                        <div className="flex flex-col items-center justify-center space-y-2.5">
+                          <div className="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400">
+                            <Key className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <p className="font-extrabold text-xs">No active access records</p>
+                            <p className="font-medium text-[9.5px] mt-0.5 max-w-[280px] leading-relaxed text-slate-400 mx-auto">
+                              Enrolled curriculum defaults and custom access grants for this module will show here.
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredUsersWithAccess.map(user => (
+                      <tr key={`${user.id}-${user.role}-${user.accessType}`} className="hover:bg-slate-50/40 transition-colors align-middle">
+                        <td className="px-6 py-4 font-extrabold text-slate-800">
+                          {user.fullName}
+                        </td>
+                        <td className="px-6 py-4 font-mono text-[10.5px] text-slate-500">
+                          {user.email}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2.5 py-0.5 text-[8.5px] font-black uppercase rounded-full tracking-wider border ${
+                            user.role === 'Teacher'
+                              ? 'bg-purple-50 text-purple-700 border-purple-150'
+                              : user.role === 'Reviewer'
+                              ? 'bg-amber-50 text-amber-700 border-amber-150'
+                              : 'bg-blue-50 text-blue-700 border-blue-150'
+                          }`}>
+                            {user.role}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2.5 py-0.5 text-[8.5px] font-black uppercase rounded-full tracking-wider border ${
+                            user.accessType === 'Enrolled (Standard)' 
+                              ? 'bg-emerald-50 text-emerald-750 border-emerald-150' 
+                              : 'bg-indigo-50 text-[#4F3FF0] border-indigo-150'
+                          }`}>
+                            {user.accessType === 'Enrolled (Standard)' ? 'Standard' : 'Custom'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          {user.accessType === 'Custom Grant' && user.grantId ? (
+                            <button
+                              type="button"
+                              onClick={() => handleRevokeCustom(user.grantId!, user.fullName)}
+                              className="px-3 py-1.5 hover:bg-rose-50 text-rose-600 rounded-xl transition-all cursor-pointer inline-flex items-center gap-1 text-[10px] font-black border border-transparent hover:border-rose-100"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" /> Revoke Custom Grant
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-bold select-none pr-3">Default Access</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+
         </div>
-
-      </div>
-
-      {/* Bottom Section - Matrix Permissions Table */}
-      <div className="pt-2">
-        <BatchModulePermissionsTable 
-          permissions={permissionsMatrix} 
-          courses={courses}
-          onRevoke={handleRevokeMatrix}
-        />
-      </div>
+      )}
 
     </div>
   );

@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { LogOut, Menu, X, Shield, ChevronRight, User, Search, Bell, Moon, ChevronDown } from 'lucide-react';
 import { cn } from '@/utils/utils';
 import { courseService } from '@/services/courseService';
+import { api } from '@/utils/api';
 
 export interface SidebarLink {
   label: string;
@@ -25,38 +26,9 @@ export interface MainLayoutProps {
   logoIcon?: React.ComponentType<{ className?: string }>;
 }
 
-const getBatchForCourse = (courseId: string, courseName: string): string => {
-  const map: Record<string, string> = {
-    'crs-1': 'iCD110',
-    'crs-2': 'iCM111',
-    'crs-3': 'iCD112',
-    'crs-4': 'iCM113',
-    'crs-5': 'iCD114',
-    'crs-6': 'iCD115',
-    'crs0001': 'iCD110',
-    'crs0002': 'iCD110',
-    'crs0003': 'iCD110',
-    'crs0004': 'iCM111',
-    'crs0005': 'iCD112',
-    'crs0006': 'iCD110',
-    'icd110': 'iCD110',
-    'icm111': 'iCM111',
-  };
-  const idKey = courseId.toLowerCase();
-  if (map[idKey]) return map[idKey];
-  
-  const nameLower = courseName.toLowerCase();
-  if (nameLower.includes('programming') || nameLower.includes('software')) return 'iCD110';
-  if (nameLower.includes('database') || nameLower.includes('web')) return 'iCM111';
-  if (nameLower.includes('oriented') || nameLower.includes('oop')) return 'iCD112';
-  if (nameLower.includes('internet') || nameLower.includes('technologies')) return 'iCM113';
-  if (nameLower.includes('standalone')) return 'iCD114';
-  if (nameLower.includes('enterprise')) return 'iCD115';
-  
-  return 'iCD110';
-};
+// getBatchForCourse helper removed (using actual backend data now)
 
-const getBreadcrumbLabel = (segment: string, dbCourses: any[] = []): string => {
+const getBreadcrumbLabel = (segment: string, dbCourses: any[] = [], dbExams: any[] = [], dbAttempts: any[] = []): string => {
   // Case-insensitive lookup in localStorage
   let storedName = null;
   const targetKey = `user_name_${segment.toLowerCase()}`;
@@ -83,9 +55,10 @@ const getBreadcrumbLabel = (segment: string, dbCourses: any[] = []): string => {
     exams: 'Exams',
     results: 'Results',
     materials: 'Materials',
+    'points-levels': 'Points & Levels',
     'task-creator': 'Task Creator',
     'reviewer-workflow': 'Reviews',
-    'points-levels': 'Points & Levels',
+    
     reports: 'Reports'
   };
   
@@ -97,8 +70,25 @@ const getBreadcrumbLabel = (segment: string, dbCourses: any[] = []): string => {
     c.courseId?.toUpperCase() === segment.toUpperCase()
   );
   if (foundDb) {
-    const batch = foundDb.batchCode || getBatchForCourse(foundDb.courseId, foundDb.courseName);
-    return `${batch} ${foundDb.courseName}`;
+    const batch = foundDb.batchCode || '';
+    return batch ? `${batch} ${foundDb.courseName}` : foundDb.courseName;
+  }
+
+  // 2. Check loaded database exams list
+  const foundExam = dbExams.find((e: any) => 
+    e.id?.toUpperCase() === segment.toUpperCase()
+  );
+  if (foundExam) {
+    return foundExam.title;
+  }
+
+  // 3. Check loaded database attempts list
+  const foundAttempt = dbAttempts.find((a: any) => 
+    a.attemptId?.toUpperCase() === segment.toUpperCase()
+  );
+  if (foundAttempt) {
+    const examDetail = dbExams.find((e: any) => e.id?.toUpperCase() === foundAttempt.examId?.toUpperCase());
+    return examDetail ? `${examDetail.title} Attempt` : 'Exam Attempt';
   }
   
   const isCourseId = key.startsWith('crs') || key.startsWith('icd') || key.startsWith('icm');
@@ -113,18 +103,7 @@ const getBreadcrumbLabel = (segment: string, dbCourses: any[] = []): string => {
       if (found) return `${found.batchCode} ${found.courseName}`;
     }
     
-    const staticKey = segment.toUpperCase().replace(/-/g, '_');
-    const staticMap: Record<string, string> = {
-      CRS_1: 'ICD110 Programming Fundamentals',
-      ICD110: 'ICD110 Advanced Software Engineering',
-      CRS_2: 'ICM111 Database Management System',
-      ICM111: 'ICM111 Full Stack Web Development',
-      CRS_3: 'ICD112 Object Oriented Programming',
-      CRS_4: 'ICM113 Internet Technologies',
-      CRS_5: 'ICD114 Standalone Application',
-      CRS_6: 'ICD115 Enterprise Engineering'
-    };
-    if (staticMap[staticKey]) return staticMap[staticKey];
+    // Static mapping fallbacks removed (using actual backend data now)
   }
 
   return segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');
@@ -143,6 +122,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedLinks, setExpandedLinks] = useState<Record<string, boolean>>({});
   const [dbCourses, setDbCourses] = useState<any[]>([]);
+  const [dbExams, setDbExams] = useState<any[]>([]);
+  const [dbAttempts, setDbAttempts] = useState<any[]>([]);
   const [, setBreadcrumbUpdate] = useState(0);
 
   useEffect(() => {
@@ -157,7 +138,28 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     courseService.getCourses()
       .then(data => setDbCourses(data))
       .catch(err => console.error('Error fetching courses for breadcrumbs:', err));
-  }, []);
+
+    api.get<any[]>('/api/v1/exams')
+      .then(data => setDbExams(data))
+      .catch(err => console.error('Error fetching exams for breadcrumbs:', err));
+
+    const loadAttempts = async () => {
+      try {
+        if (user?.role?.toUpperCase() === 'STUDENT') {
+          const studentAtts = await api.get<any[]>(`/api/v1/exam-attempts/student/${user.userId}`);
+          setDbAttempts(studentAtts || []);
+        } else {
+          const allAtts = await api.get<any[]>('/api/v1/exam-attempts');
+          setDbAttempts(allAtts || []);
+        }
+      } catch (e) {
+        console.error('Error fetching attempts for breadcrumbs:', e);
+      }
+    };
+    if (user?.userId) {
+      loadAttempts();
+    }
+  }, [user]);
 
   const generateBreadcrumbs = () => {
     const rawSegments = location.pathname.split('/').filter(x => x);
@@ -189,9 +191,38 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     let currentPath = prefixPath;
     subSegments.forEach((seg) => {
       currentPath += `/${seg}`;
+      
+      let label = getBreadcrumbLabel(seg, dbCourses, dbExams, dbAttempts);
+      let finalPath = currentPath;
+      
+      if (role === 'ADMIN' && seg.toLowerCase() === 'courses') {
+        label = 'Courses & Batches';
+        finalPath = '/admin/courses-calendars?tab=courses';
+      } else if (role === 'STUDENT' && seg.toLowerCase() === 'courses') {
+        finalPath = '/student/academics';
+      }
+
+      const isExamSegment = dbExams.some(e => e.id?.toUpperCase() === seg.toUpperCase());
+      if (isExamSegment) {
+        finalPath = `${prefixPath}/exams?tab=PUBLISHED`;
+      }
+
+      if (seg.toLowerCase() === 'attempts') {
+        if (role === 'STUDENT') {
+          finalPath = `/student/academics`;
+        } else {
+          finalPath = `${prefixPath}/exams`;
+        }
+      }
+
+      const isAttemptSegment = dbAttempts.some(a => a.attemptId?.toUpperCase() === seg.toUpperCase());
+      if (isAttemptSegment) {
+        finalPath = `${prefixPath}/exams/attempts/${seg}/result`;
+      }
+      
       items.push({
-        label: getBreadcrumbLabel(seg, dbCourses),
-        path: currentPath
+        label,
+        path: finalPath
       });
     });
     
