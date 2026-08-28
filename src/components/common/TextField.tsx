@@ -1,5 +1,6 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useState } from 'react';
 import { cn } from '@/utils/utils';
+import { Eye, EyeOff } from 'lucide-react';
 
 export interface TextFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -30,6 +31,19 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
     },
     ref
   ) => {
+    const [showPassword, setShowPassword] = useState(false);
+    const isPassword = type === 'password';
+
+    const displayRightElement = rightElement || (isPassword ? (
+      <button
+        type="button"
+        onClick={() => setShowPassword(prev => !prev)}
+        className="text-slate-450 hover:text-[#4F3FF0] focus:outline-none transition-colors cursor-pointer mr-1"
+      >
+        {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+      </button>
+    ) : null);
+
     // Generate simple ID if not provided
     const inputId = id || (label ? `input-${label.toLowerCase().replace(/\s+/g, '-')}` : undefined);
 
@@ -71,12 +85,12 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
           <input
             id={inputId}
             ref={ref}
-            type={type}
+            type={isPassword && showPassword ? 'text' : type}
             disabled={disabled}
             className={cn(
               'w-full py-3.5 bg-[#F8FAFC] border rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none transition-all duration-200 font-medium',
               Icon ? 'pl-12' : 'pl-4',
-              rightElement ? 'pr-12' : 'pr-4',
+              displayRightElement ? 'pr-12' : 'pr-4',
               disabled && 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed',
               error
                 ? 'border-rose-300 focus:border-rose-500 bg-rose-50/20 focus:bg-white focus:ring-4 focus:ring-rose-500/10'
@@ -86,9 +100,9 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
             {...props}
           />
 
-          {rightElement && (
+          {displayRightElement && (
             <span className="absolute inset-y-0 right-0 flex items-center pr-3">
-              {rightElement}
+              {displayRightElement}
             </span>
           )}
         </div>

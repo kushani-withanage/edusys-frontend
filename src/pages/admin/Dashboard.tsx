@@ -55,6 +55,7 @@ const Dashboard: React.FC = () => {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [careerStats, setCareerStats] = useState<CareerStatsResponse | null>(null);
+  const [upcomingMilestones, setUpcomingMilestones] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showError, setShowError] = useState(false);
@@ -73,18 +74,78 @@ const Dashboard: React.FC = () => {
           studentsData,
           batchesData,
           statsData,
-          careerStatsData
+          careerStatsData,
+          examsData,
+          assignmentsData
         ] = await Promise.all([
           api.get<Student[]>('/api/v1/students'),
           api.get<Batch[]>('/api/v1/batches'),
           api.get<DashboardStats>('/api/v1/dashboard/stats'),
-          api.get<CareerStatsResponse>('/api/v1/career/stats').catch(() => null)
+          api.get<CareerStatsResponse>('/api/v1/career/stats').catch(() => null),
+          api.get<any[]>('/api/v1/exams').catch(() => []),
+          api.get<any[]>('/api/v1/assignments').catch(() => [])
         ]);
 
         setStudents(studentsData);
         setBatches(batchesData);
         setDashboardStats(statsData);
         setCareerStats(careerStatsData);
+
+        const nowMs = new Date().getTime();
+        const upcomingEx = (examsData || [])
+          .filter((ex: any) => {
+            const endMs = ex.endTime ? new Date(ex.endTime).getTime() : 0;
+            return endMs > nowMs && ex.status?.toUpperCase() !== 'DRAFT';
+          })
+          .map((ex: any) => ({
+            type: 'UPCOMING EXAMS',
+            title: ex.title,
+            description: ex.description || 'Online LMS exam session',
+            date: ex.startTime ? new Date(ex.startTime).toLocaleDateString(undefined, { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Soon',
+            rawDate: ex.startTime || ''
+          }));
+
+        const upcomingAsg = (assignmentsData || [])
+          .filter((asg: any) => {
+            const dueMs = asg.dueDate ? new Date(asg.dueDate).getTime() : 0;
+            return dueMs > nowMs;
+          })
+          .map((asg: any) => ({
+            type: 'UPCOMING ASSIGNMENTS',
+            title: asg.title,
+            description: asg.description || 'LMS course assignment submission',
+            date: asg.dueDate ? new Date(asg.dueDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Soon',
+            rawDate: asg.dueDate || ''
+          }));
+
+        const sorted = [...upcomingEx, ...upcomingAsg].sort((a, b) => {
+          if (!a.rawDate) return 1;
+          if (!b.rawDate) return -1;
+          return new Date(a.rawDate).getTime() - new Date(b.rawDate).getTime();
+        });
+
+        let finalMilestones = [...sorted];
+        if (finalMilestones.length < 3) {
+          const fallbacks = [
+            {
+              type: 'BATCHES INCEPTION',
+              title: 'iCD110 & iCM111 Orientation',
+              description: 'Welcome and induction program for new batches.',
+              date: 'Next Monday, 09:00 AM'
+            },
+            {
+              type: 'CAMPUS HOLIDAYS',
+              title: 'Mid-Term Winter Holiday',
+              description: 'Campus closed for maintenance and student holidays.',
+              date: 'December 20th'
+            }
+          ];
+          for (const fb of fallbacks) {
+            if (finalMilestones.length >= 3) break;
+            finalMilestones.push(fb);
+          }
+        }
+        setUpcomingMilestones(finalMilestones.slice(0, 3));
         setError(null);
       } catch (err: any) {
         console.error('Error fetching dashboard metrics:', err);
@@ -352,32 +413,21 @@ const Dashboard: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {/* Card 1 */}
-          <div className="bg-[#F8FAFC] border border-[#E2E8F0]/80 rounded-xl p-4.5 space-y-2">
-            <span className="block text-xs font-semibold text-slate-400 tracking-wider uppercase">BATCHES INCEPTION</span>
-            <h4 className="text-xs font-semibold text-slate-800 leading-tight">FSW-2026-C (Web Development)</h4>
-            <p className="text-xs font-normal text-slate-500 leading-relaxed">
-              Starts next Monday. Instructor: Ada Lovelace. 30 registered students.
-            </p>
-          </div>
-
-          {/* Card 2 */}
-          <div className="bg-[#F8FAFC] border border-[#E2E8F0]/80 rounded-xl p-4.5 space-y-2">
-            <span className="block text-xs font-semibold text-slate-400 tracking-wider uppercase">UPCOMING EXAMS</span>
-            <h4 className="text-xs font-semibold text-slate-800 leading-tight">Term 1 Assessment: Databases</h4>
-            <p className="text-xs font-normal text-slate-500 leading-relaxed">
-              Scheduled for July 20th, 10:00 AM. 1-Hour timed MCQ question pool.
-            </p>
-          </div>
-
-          {/* Card 3 */}
-          <div className="bg-[#F8FAFC] border border-[#E2E8F0]/80 rounded-xl p-4.5 space-y-2">
-            <span className="block text-xs font-semibold text-slate-400 tracking-wider uppercase">CAMPUS HOLIDAYS</span>
-            <h4 className="text-xs font-semibold text-slate-800 leading-tight">Mid-Term Summer Holiday</h4>
-            <p className="text-xs font-normal text-slate-500 leading-relaxed">
-              July 25th. All batch programs suspended for campus maintenance.
-            </p>
-          </div>
+          {upcomingMilestones.map((milestone, idx) => (
+            <div key={idx} className="bg-[#F8FAFC] border border-[#E2E8F0]/80 rounded-xl p-4.5 space-y-2">
+              <span className="block text-xs font-semibold text-slate-400 tracking-wider uppercase">{milestone.type}</span>
+              <h4 className="text-xs font-semibold text-slate-800 leading-tight">{milestone.title}</h4>
+              <p className="text-xs font-normal text-slate-500 leading-relaxed">
+                {milestone.description}
+              </p>
+              <div className="text-[10px] font-bold text-[#4F3FF0] bg-[#4F3FF0]/5 border border-[#4F3FF0]/10 px-2 py-1 rounded-md inline-block">
+                {milestone.date}
+              </div>
+            </div>
+          ))}
+          {upcomingMilestones.length === 0 && (
+            <p className="text-slate-400 text-sm text-center py-6 col-span-3">No upcoming academic milestones or exams scheduled.</p>
+          )}
         </div>
       </div>
     </div>

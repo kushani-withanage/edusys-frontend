@@ -88,7 +88,7 @@ export const AcademicCalendar: React.FC = () => {
       {/* Events List */}
       <div className="lg:col-span-2 space-y-4">
         <div className="bg-white border border-[#E9EDF5] rounded-2xl p-6 shadow-sm">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-455 mb-4 select-none">UPCOMING ACADEMIC EVENTS</h3>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-455 mb-4 select-none">ACADEMIC EVENTS</h3>
           
           {loading ? (
             <div className="flex items-center justify-center py-10">

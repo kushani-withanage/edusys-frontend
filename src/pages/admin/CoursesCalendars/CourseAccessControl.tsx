@@ -259,11 +259,11 @@ export const CourseAccessControl: React.FC = () => {
   const selectedCourseName = useMemo(() => {
     const matchedCourse = courses.find(c => c.courseId === selectedCourseId);
     if (!matchedCourse) return 'Select Course Module';
-    if (selectedCourseBatchName && targetRole === 'STUDENT') {
+    if (selectedCourseBatchName) {
       return `${matchedCourse.courseName} - ${selectedCourseBatchName}`;
     }
     return matchedCourse.courseName;
-  }, [courses, selectedCourseId, selectedCourseBatchName, targetRole]);
+  }, [courses, selectedCourseId, selectedCourseBatchName]);
 
   // Students enrolled in standard batch
   const batchStudents = useMemo(() => {

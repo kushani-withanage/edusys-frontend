@@ -35,6 +35,7 @@ export const StudentDashboard: React.FC = () => {
   const [nextLevelPoints, setNextLevelPoints] = useState(100);
   const [currentLevelTitle, setCurrentLevelTitle] = useState('L1 Beginner');
   const [grades, setGrades] = useState<any[]>([]);
+  const [studentRegNo, setStudentRegNo] = useState('');
 
   useEffect(() => {
     if (user?.userId) {
@@ -47,6 +48,14 @@ export const StudentDashboard: React.FC = () => {
           }
         })
         .catch(err => console.error("Error loading career points:", err));
+
+      api.get<any>(`/api/v1/students/${user.userId}`)
+        .then(data => {
+          if (data && data.regNo) {
+            setStudentRegNo(data.regNo);
+          }
+        })
+        .catch(err => console.error("Error loading student profile:", err));
 
       gradeService.getGrades()
         .then(data => {
@@ -170,9 +179,16 @@ export const StudentDashboard: React.FC = () => {
       {/* Welcome Banner */}
       <div className="bg-[#4F3FF0] rounded-3xl p-8 text-white relative overflow-hidden flex flex-col md:flex-row md:items-center md:justify-between gap-8 shadow-[0_8px_30px_rgba(79,63,240,0.15)] font-sans animate-in fade-in slide-in-from-top-4 duration-500">
         <div className="space-y-3.5 relative z-10 flex-1">
-          <span className="text-[10px] font-extrabold tracking-widest bg-white/20 uppercase px-3 py-1 rounded-full text-white inline-block">
-            WELCOME BACK, {user?.fullName?.toUpperCase() || 'STUDENT'}!
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-extrabold tracking-widest bg-white/20 uppercase px-3 py-1 rounded-full text-white inline-block">
+              WELCOME BACK, {user?.fullName?.toUpperCase() || 'STUDENT'}!
+            </span>
+            {studentRegNo && (
+              <span className="text-[10px] font-extrabold tracking-widest bg-amber-400/20 border border-amber-400/30 uppercase px-3 py-1 rounded-full text-amber-300 inline-block">
+                Reg No: {studentRegNo}
+              </span>
+            )}
+          </div>
           <h2 className="text-2xl font-black font-heading mt-1">Software Trainee LMS Portal</h2>
           <p className="text-white/80 text-xs font-semibold leading-relaxed max-w-xl">
             You are performing exceptionally! You've achieved {currentLevelTitle} status. Keep up the great work to reach the next level!

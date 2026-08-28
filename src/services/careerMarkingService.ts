@@ -8,6 +8,7 @@ export interface CareerStudentTaskStatusData {
   pointsValue?: number;
   studentId: string;
   studentName?: string;
+  regNo?: string;
   status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
   pointsAwarded?: number | null;
   markedBy?: string;

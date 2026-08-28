@@ -370,7 +370,7 @@ export const Reviews: React.FC = () => {
                         <tr key={student.studentId} className="hover:bg-slate-50/20">
                           <td className="px-6 py-4">
                             <span className="font-extrabold text-slate-800 text-xs block">{student.studentName}</span>
-                            <span className="text-[9px] text-slate-400 block font-bold mt-0.5">{student.studentId}</span>
+                            <span className="text-[9px] text-slate-400 block font-bold mt-0.5">{student.regNo || student.studentId}</span>
                           </td>
                           <td className="px-6 py-4">
                             <select
