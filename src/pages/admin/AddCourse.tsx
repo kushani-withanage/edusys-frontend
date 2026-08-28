@@ -35,8 +35,11 @@ export const AddCourse: React.FC = () => {
     // Fetch batches
     batchService.getBatches()
       .then(data => {
-        setDbBatches(data);
-        if (data.length > 0) {
+        setDbBatches(data || []);
+        const activeOrPending = (data || []).filter((b: any) => b.status !== 'Finished');
+        if (activeOrPending.length > 0) {
+          setBatchCode(activeOrPending[0].batchName);
+        } else if (data && data.length > 0) {
           setBatchCode(data[0].batchName);
         }
       })
@@ -215,8 +218,10 @@ export const AddCourse: React.FC = () => {
                 className="w-full px-4 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-xs text-slate-750 font-bold outline-none cursor-pointer"
               >
                 {dbBatches.length > 0 ? (
-                  dbBatches.map(b => (
-                    <option key={b.batchId} value={b.batchName}>{b.batchName}</option>
+                  dbBatches.filter(b => b.status !== 'Finished' || b.batchName === batchCode).map(b => (
+                    <option key={b.batchId} value={b.batchName}>
+                      {b.batchName} {b.status === 'Finished' ? '(Finished)' : ''}
+                    </option>
                   ))
                 ) : (
                   <>

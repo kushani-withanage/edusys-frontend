@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ChevronRight, 
@@ -44,6 +44,7 @@ export const ExamBuilderPage: React.FC = () => {
 
   // Lists
   const [courses, setCourses] = useState<any[]>([]);
+  const [standardCourses, setStandardCourses] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
   const [moduleQuestions, setModuleQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,24 +80,98 @@ export const ExamBuilderPage: React.FC = () => {
   const [attemptsAllowed, setAttemptsAllowed] = useState('1');
   const [passMarks, setPassMarks] = useState('40');
 
+  const safeStandardCourses = Array.isArray(standardCourses) ? standardCourses : [];
+  const safeBatches = Array.isArray(batches) ? batches : [];
+
+  // Generate list of course options paired with related batches (like course access section)
+  const courseOptions = useMemo(() => {
+    const options: Array<{
+      key: string;
+      courseId: string;
+      courseName: string;
+      batchId: string | null;
+      batchName: string | null;
+      displayName: string;
+    }> = [];
+
+    const seenDisplayNames = new Set<string>();
+
+    safeStandardCourses.forEach(course => {
+      const assignedBatches: any[] = [];
+      safeBatches.filter((b: any) => b && b.status !== 'Finished').forEach(batch => {
+        const batchCourses = batch.courses || [];
+        const isStandard = batchCourses.some((c: any) => c.courseId.toLowerCase() === course.courseId.toLowerCase());
+        
+        const isDirectBatch = course.batchCode ? (
+          course.batchCode.toLowerCase().split(',').map((s: string) => s.trim()).includes(batch.batchName.toLowerCase()) ||
+          course.batchCode.toLowerCase().split(',').map((s: string) => s.trim()).includes(batch.batchId.toLowerCase())
+        ) : false;
+
+        if (isStandard || isDirectBatch) {
+          assignedBatches.push(batch);
+        }
+      });
+
+      if (assignedBatches.length > 0) {
+        const uniqueBatches = assignedBatches.filter((b, index, self) =>
+          self.findIndex(tb => tb.batchId === b.batchId) === index
+        );
+
+        uniqueBatches.forEach(batch => {
+          const displayName = `${course.courseName} - ${batch.batchName}`;
+          if (!seenDisplayNames.has(displayName.toLowerCase())) {
+            seenDisplayNames.add(displayName.toLowerCase());
+            options.push({
+              key: `${course.courseId}@${batch.batchId}`,
+              courseId: course.courseId,
+              courseName: course.courseName,
+              batchId: batch.batchId,
+              batchName: batch.batchName,
+              displayName: displayName
+            });
+          }
+        });
+      } else {
+        const displayName = course.courseName;
+        if (!seenDisplayNames.has(displayName.toLowerCase())) {
+          seenDisplayNames.add(displayName.toLowerCase());
+          options.push({
+            key: `${course.courseId}`,
+            courseId: course.courseId,
+            courseName: course.courseName,
+            batchId: null,
+            batchName: null,
+            displayName: displayName
+          });
+        }
+      }
+    });
+
+    return options;
+  }, [safeStandardCourses, safeBatches]);
+
   useEffect(() => {
     const initData = async () => {
       try {
         setLoading(true);
-        const [coursesData, batchesData] = await Promise.all([
+        const [coursesData, standardCoursesData, batchesData] = await Promise.all([
+          api.get<any[]>('/api/v1/exam-courses'),
           api.get<any[]>('/api/v1/courses'),
           api.get<any[]>('/api/v1/batches')
         ]);
         
         const validCourses = Array.isArray(coursesData) ? coursesData : [];
+        const validStandardCourses = Array.isArray(standardCoursesData) ? standardCoursesData : [];
         const validBatches = Array.isArray(batchesData) ? batchesData : [];
         
         setCourses(validCourses);
+        setStandardCourses(validStandardCourses);
         setBatches(validBatches);
 
+        const firstActiveBatch = validBatches.find(b => b && b.status !== 'Finished');
         if (validCourses.length > 0) {
           setCourseId(validCourses[0].courseId);
-          setTargetId(validBatches.length > 0 ? validBatches[0].batchId : validCourses[0].courseId);
+          setTargetId(firstActiveBatch ? firstActiveBatch.batchId : (validCourses[0].courseId || ''));
         }
 
         if (examId) {
@@ -156,6 +231,23 @@ export const ExamBuilderPage: React.FC = () => {
       return;
     }
 
+    if (targetType === 'BATCH') {
+      const batchObj = batches.find(b => b.batchId === targetId);
+      if (batchObj && batchObj.status === 'Finished') {
+        toast.error('Cannot add finished batch as target.');
+        return;
+      }
+    } else if (targetType === 'MODULE') {
+      if (targetId.includes('@')) {
+        const [_, bId] = targetId.split('@');
+        const batchObj = batches.find(b => b.batchId === bId);
+        if (batchObj && batchObj.status === 'Finished') {
+          toast.error('Cannot add module for finished batch as target.');
+          return;
+        }
+      }
+    }
+
     const isDuplicate = audiences.some(
       a => a.targetType === targetType && a.targetId === targetId
     );
@@ -211,7 +303,7 @@ export const ExamBuilderPage: React.FC = () => {
     const payload = {
       title,
       description,
-      courseId: courseId || null,
+      courseId: (!courseId || courseId === 'ALL') ? null : courseId,
       startTime,
       endTime,
       durationMinutes: durationVal,
@@ -269,7 +361,6 @@ export const ExamBuilderPage: React.FC = () => {
 
   const safeModuleQuestions = Array.isArray(moduleQuestions) ? moduleQuestions : [];
   const safeCourses = Array.isArray(courses) ? courses : [];
-  const safeBatches = Array.isArray(batches) ? batches : [];
 
   const selectedQuestions = safeModuleQuestions.filter(q => q && q.id && selectedQuestionIds.includes(q.id));
   const totalMarks = selectedQuestions.reduce((sum, q) => sum + (q.defaultMarks || 0), 0);
@@ -278,6 +369,15 @@ export const ExamBuilderPage: React.FC = () => {
     if (type === 'BATCH') {
       return safeBatches.find(b => b && b.batchId === id)?.batchName || 'Unknown Batch';
     } else {
+      const foundOpt = courseOptions.find((opt: any) => opt.key === id);
+      if (foundOpt) return foundOpt.displayName;
+
+      if (id.includes('@')) {
+        const [cId, bId] = id.split('@');
+        const cName = safeStandardCourses.find(c => c && c.courseId === cId)?.courseName || 'Unknown Course';
+        const bName = safeBatches.find(b => b && b.batchId === bId)?.batchName || 'Unknown Batch';
+        return `${cName} - ${bName}`;
+      }
       return safeCourses.find(c => c && c.courseId === id)?.courseName || 'Unknown Module';
     }
   };
@@ -350,6 +450,7 @@ export const ExamBuilderPage: React.FC = () => {
                 onChange={(e) => setCourseId(e.target.value)}
                 className="w-full px-3.5 py-2.5 border border-slate-200 focus:border-[#4F3FF0] rounded-xl outline-none text-xs font-bold text-slate-700 bg-white"
               >
+                <option value="ALL">All Modules</option>
                 {courses.map(c => (
                   <option key={c.courseId} value={c.courseId}>{c.courseName}</option>
                 ))}
@@ -382,35 +483,45 @@ export const ExamBuilderPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-3.5 max-h-[400px] overflow-y-auto pr-1">
-                  {filteredQuestions.map(q => (
-                    <label 
-                      key={q.id}
-                      className={`flex gap-3.5 p-3.5 border rounded-2xl cursor-pointer select-none transition-all ${
-                        selectedQuestionIds.includes(q.id)
-                          ? 'bg-[#4F3FF0]/5 border-[#4F3FF0]'
-                          : 'bg-white border-slate-200 hover:border-slate-350'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedQuestionIds.includes(q.id)}
-                        onChange={() => handleToggleQuestion(q.id)}
-                        className="mt-0.5 h-4 w-4 rounded text-[#4F3FF0] focus:ring-[#4F3FF0]"
-                      />
-                      <div className="space-y-1">
-                        <p className="text-xs font-extrabold text-slate-800 leading-snug">{q.questionText}</p>
-                        <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase">
-                          <span className={
-                            q.difficulty === 'EASY' ? 'text-emerald-600' :
-                            q.difficulty === 'MEDIUM' ? 'text-amber-600' :
-                            'text-rose-600'
-                          }>{q.difficulty}</span>
-                          <span>•</span>
-                          <span>Marks: {q.defaultMarks}</span>
+                  {filteredQuestions.map(q => {
+                    const examCourse = courses.find(c => c.courseId?.toLowerCase() === q.courseId?.toLowerCase());
+                    const examCourseName = examCourse ? examCourse.courseName : '';
+                    return (
+                      <label 
+                        key={q.id}
+                        className={`flex gap-3.5 p-3.5 border rounded-2xl cursor-pointer select-none transition-all ${
+                          selectedQuestionIds.includes(q.id)
+                            ? 'bg-[#4F3FF0]/5 border-[#4F3FF0]'
+                            : 'bg-white border-slate-200 hover:border-slate-350'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedQuestionIds.includes(q.id)}
+                          onChange={() => handleToggleQuestion(q.id)}
+                          className="mt-0.5 h-4 w-4 rounded text-[#4F3FF0] focus:ring-[#4F3FF0]"
+                        />
+                        <div className="space-y-1">
+                          <p className="text-xs font-extrabold text-slate-800 leading-snug">{q.questionText}</p>
+                          <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase">
+                            {examCourseName && (
+                              <span className="text-[#4F3FF0] bg-[#4F3FF0]/8 px-1.5 py-0.5 rounded-md font-black">
+                                {examCourseName}
+                              </span>
+                            )}
+                            {examCourseName && <span>•</span>}
+                            <span className={
+                              q.difficulty === 'EASY' ? 'text-emerald-600' :
+                              q.difficulty === 'MEDIUM' ? 'text-amber-600' :
+                              'text-rose-600'
+                            }>{q.difficulty}</span>
+                            <span>•</span>
+                            <span>Marks: {q.defaultMarks}</span>
+                          </div>
                         </div>
-                      </div>
-                    </label>
-                  ))}
+                      </label>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -445,9 +556,10 @@ export const ExamBuilderPage: React.FC = () => {
                   onChange={(e) => {
                     const newType = e.target.value as 'BATCH' | 'MODULE';
                     setTargetType(newType);
-                    setTargetId(newType === 'BATCH' ? (batches[0]?.batchId || '') : (courses[0]?.courseId || ''));
+                    const firstActiveBatch = batches.find((b: any) => b && b.status !== 'Finished');
+                    setTargetId(newType === 'BATCH' ? (firstActiveBatch?.batchId || '') : (courseOptions[0]?.key || ''));
                   }}
-                  className="w-full px-3 py-1.5 border border-slate-200 focus:border-[#4F3FF0] rounded-xl outline-none text-xs font-bold text-slate-700 bg-white"
+                  className="w-full px-3 py-1.5 border border-slate-200 focus:border-[#4F3FF0] rounded-xl outline-none text-xs font-bold text-slate-707 bg-white"
                 >
                   <option value="BATCH">Batch Audience</option>
                   <option value="MODULE">Module (Course) Access</option>
@@ -460,9 +572,9 @@ export const ExamBuilderPage: React.FC = () => {
                   <select
                     value={targetId}
                     onChange={(e) => setTargetId(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-slate-200 focus:border-[#4F3FF0] rounded-xl outline-none text-xs font-bold text-slate-700 bg-white"
+                    className="w-full px-3 py-1.5 border border-slate-200 focus:border-[#4F3FF0] rounded-xl outline-none text-xs font-bold text-slate-707 bg-white"
                   >
-                    {batches.map(b => (
+                    {batches.filter((b: any) => b && b.status !== 'Finished').map((b: any) => (
                       <option key={b.batchId} value={b.batchId}>{b.batchName}</option>
                     ))}
                   </select>
@@ -470,10 +582,10 @@ export const ExamBuilderPage: React.FC = () => {
                   <select
                     value={targetId}
                     onChange={(e) => setTargetId(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-slate-200 focus:border-[#4F3FF0] rounded-xl outline-none text-xs font-bold text-slate-700 bg-white"
+                    className="w-full px-3 py-1.5 border border-slate-200 focus:border-[#4F3FF0] rounded-xl outline-none text-xs font-bold text-slate-707 bg-white"
                   >
-                    {courses.map(c => (
-                      <option key={c.courseId} value={c.courseId}>{c.courseName}</option>
+                    {courseOptions.map((opt: any) => (
+                      <option key={opt.key} value={opt.key}>{opt.displayName}</option>
                     ))}
                   </select>
                 )}

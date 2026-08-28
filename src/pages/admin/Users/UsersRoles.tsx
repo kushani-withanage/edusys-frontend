@@ -14,17 +14,7 @@ import Button from '@/components/common/Button';
 import { api } from '@/utils/api';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
-export interface User {
-  userId: string;
-  fullName: string;
-  email: string;
-  role: string;
-  phone: string;
-  status: string;
-  createdAt: string;
-  firstLogin?: string;
-  lastLogin?: string;
-}
+import type { User } from './types';
 
 export const UsersRoles: React.FC = () => {
   const navigate = useNavigate();

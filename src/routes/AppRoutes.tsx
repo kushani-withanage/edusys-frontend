@@ -7,19 +7,17 @@ import ReviewerLayout from '@/layouts/ReviewerLayout';
 import ParentLayout from '@/layouts/ParentLayout';
 
 import Dashboard from '@/pages/admin/Dashboard';
-import UsersRoles from '@/pages/admin/UsersRoles';
-import AddUser from '@/pages/admin/AddUser';
+import { UsersRoles, AddUser } from '@/pages/admin/Users/index';
 import CoursesCalendars from '@/pages/admin/CoursesCalendars/index';
 import AddCourse from '@/pages/admin/AddCourse';
-import { ExamListPage } from '@/pages/admin/ExamListPage';
-import { QuestionBankPage } from '@/pages/admin/QuestionBankPage';
-import { ExamBuilderPage } from '@/pages/admin/ExamBuilderPage';
-import { ExamResultsPage } from '@/pages/admin/ExamResultsPage';
-import Results from '@/pages/admin/Results';
+import { 
+  ExamListPage, 
+  QuestionBankPage, 
+  ExamBuilderPage, 
+  ExamResultsPage 
+} from '@/pages/admin/Exams/index';
 
-import CareerTasks from '@/pages/admin/CareerTasks';
-import Reviews from '@/pages/admin/Reviews';
-import PointsLevels from '@/pages/admin/PointsLevels';
+import { CareerTasks, Reviews, PointsLevels } from '@/pages/admin/Career/index';
 import Reports from '@/pages/admin/Reports';
 import CourseAccess from '@/pages/admin/CourseAccess';
 
@@ -84,7 +82,6 @@ function AppRoutes() {
           <Route path="/admin/exams/edit/:examId" element={<ExamBuilderPage />} />
           <Route path="/admin/exams/:examId/analytics" element={<ExamResultsPage />} />
           <Route path="/admin/exams/attempts/:attemptId/result" element={<ExamResultPage />} />
-          <Route path="/admin/results" element={<Results />} />
 
           <Route path="/admin/task-creator" element={<CareerTasks />} />
           <Route path="/admin/reviewer-workflow" element={<Reviews />} />
@@ -127,7 +124,7 @@ function AppRoutes() {
           <Route path="/teacher/exams/edit/:examId" element={<ExamBuilderPage />} />
           <Route path="/teacher/exams/:examId/analytics" element={<ExamResultsPage />} />
           <Route path="/teacher/exams/attempts/:attemptId/result" element={<ExamResultPage />} />
-          <Route path="/teacher/results" element={<Results />} />
+          <Route path="/teacher/reports" element={<Reports />} />
           <Route path="/teacher/courses" element={<AssignedCourses />} />
           <Route path="/teacher/courses/:courseId" element={<StudentCourseDetail />} />
 

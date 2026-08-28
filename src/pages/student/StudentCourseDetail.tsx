@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   ChevronRight, 
@@ -74,6 +74,15 @@ export const StudentCourseDetail: React.FC = () => {
   const isAdmin = user?.role?.toUpperCase() === 'ADMIN' || user?.role?.toUpperCase() === 'TEACHER' || user?.role?.toUpperCase() === 'REVIEWER';
 
   const [course, setCourse] = useState<any | null>(null);
+  const [exams, setExams] = useState<any[]>([]);
+  useEffect(() => {
+    if (!isAdmin && user?.userId) {
+      api.get<any[]>('/api/v1/student-exams/available')
+        .then(data => setExams(Array.isArray(data) ? data : []))
+        .catch(err => console.error('Failed to load available student exams', err));
+    }
+  }, [user, isAdmin]);
+
   const [loading, setLoading] = useState(true);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -794,6 +803,16 @@ export const StudentCourseDetail: React.FC = () => {
       setLoading(false);
     }
   };
+  const courseExams = useMemo(() => {
+    if (!course || !courseId || !exams.length) return [];
+    return exams.filter(e => {
+      if (e.targetedCourseIds && e.targetedCourseIds.length > 0) {
+        return e.targetedCourseIds.some((cid: string) => cid.toLowerCase() === courseId.toLowerCase());
+      }
+      return false;
+    });
+  }, [course, courseId, exams]);
+
   if (loading || !course) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3 bg-white border border-[#E9EDF5] rounded-2xl shadow-sm">
@@ -1639,6 +1658,100 @@ export const StudentCourseDetail: React.FC = () => {
             );
           })
         )}
+
+        {/* Accordions: Individual Module Exams */}
+        {!isAdmin && courseExams.map((exam: any) => {
+          const status = exam.studentStatus || 'AVAILABLE';
+          const isExpanded = !!expandedSections[`exam-${exam.id}`];
+          return (
+            <div key={exam.id} className="bg-white border border-[#E9EDF5] rounded-3xl shadow-sm overflow-hidden transition-all duration-200 mt-4 text-left">
+              <button
+                type="button"
+                onClick={() => toggleSection(`exam-${exam.id}`)}
+                className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/50 cursor-pointer border-b border-transparent focus:outline-none text-left"
+              >
+                <div className="flex items-center gap-2">
+                  {isExpanded ? (
+                    <ChevronDown className="h-4.5 w-4.5 text-slate-500" />
+                  ) : (
+                    <ChevronRight className="h-4.5 w-4.5 text-slate-500" />
+                  )}
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-800">📝 {exam.title}</span>
+                  <span className={`inline-flex px-2 py-0.5 border rounded-md text-[8.5px] font-extrabold tracking-wider uppercase leading-none ml-2 ${
+                    status === 'IN_PROGRESS' ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                    status === 'COMPLETED' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+                    status === 'OVERDUE' ? 'bg-rose-50 border-rose-250 text-rose-700' :
+                    'bg-emerald-100 border-emerald-200 text-emerald-800'
+                  }`}>
+                    {status}
+                  </span>
+                </div>
+              </button>
+
+              {isExpanded && (
+                <div className="p-6 border-t border-[#E9EDF5] space-y-4">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-slate-455 uppercase">
+                      ⏳ Duration: {exam.durationMinutes} mins | 🗓️ Deadline: {new Date(exam.endTime).toLocaleDateString()}
+                    </p>
+                    {exam.description && (
+                      <p className="text-[10.5px] font-medium text-slate-500 mt-1 leading-relaxed">
+                        {exam.description}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-start">
+                    {status === 'AVAILABLE' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`Are you sure you want to start "${exam.title}"?`)) {
+                            navigate(`/student/exams/${exam.id}/take`);
+                          }
+                        }}
+                        className="px-4 py-2 bg-[#4F3FF0] hover:bg-[#4335D6] text-white text-[10px] font-black rounded-xl shadow-sm cursor-pointer inline-flex items-center justify-center gap-1.5 transition-all w-full md:w-auto font-sans"
+                      >
+                        Start Exam
+                      </button>
+                    )}
+                    {status === 'IN_PROGRESS' && (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/student/exams/${exam.id}/take`)}
+                        className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black rounded-xl shadow-sm cursor-pointer inline-flex items-center justify-center gap-1.5 transition-all w-full md:w-auto font-sans"
+                      >
+                        Resume Exam
+                      </button>
+                    )}
+                    {status === 'COMPLETED' && (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/student/exams/attempts/${exam.activeAttemptId}/result`)}
+                        className="px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-650 text-[10px] font-black rounded-xl shadow-sm cursor-pointer inline-flex items-center justify-center gap-1.5 transition-all w-full md:w-auto font-sans"
+                      >
+                        View Results
+                      </button>
+                    )}
+                    {status === 'OVERDUE' && (
+                      exam.activeAttemptId ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/student/exams/attempts/${exam.activeAttemptId}/result`)}
+                          className="px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-650 text-[10px] font-black rounded-xl shadow-sm cursor-pointer inline-flex items-center justify-center gap-1.5 transition-all w-full md:w-auto font-sans"
+                        >
+                          View Results
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-400">🔒 Closed</span>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
 
       </div>
 

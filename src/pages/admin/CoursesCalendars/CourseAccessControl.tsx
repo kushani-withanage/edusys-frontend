@@ -422,6 +422,11 @@ export const CourseAccessControl: React.FC = () => {
     const targetBatch = batches.find(b => b.batchId === selectedBatchId);
     if (!targetCourse) return;
 
+    if (targetBatch && targetBatch.status === 'Finished') {
+      alert(`Cannot assign modules or grant access to a finished batch: ${targetBatch.batchName}`);
+      return;
+    }
+
     const newGrantsToCreate = selectedUserEmails.map(email => ({
       courseId: selectedCourseId,
       courseName: targetCourse.courseName,

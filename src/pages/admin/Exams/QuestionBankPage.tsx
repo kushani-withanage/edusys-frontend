@@ -23,7 +23,7 @@ export const QuestionBankPage: React.FC = () => {
   // Filters state
   const [selectedCourseId, setSelectedCourseId] = useState('ALL');
   const [selectedDifficulty, setSelectedDifficulty] = useState('ALL');
-  const [selectedStatus, setSelectedStatus] = useState('ALL');
+  const selectedStatus = 'ALL';
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modals state
@@ -36,7 +36,7 @@ export const QuestionBankPage: React.FC = () => {
     try {
       setLoading(true);
       const [coursesData, questionsData] = await Promise.all([
-        api.get<any[]>('/api/v1/courses'),
+        api.get<any[]>('/api/v1/exam-courses'),
         examService.getQuestions()
       ]);
       setCourses(coursesData);
@@ -132,7 +132,7 @@ export const QuestionBankPage: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowImportModal(true)}
-            className="px-4 py-2 text-[10.5px] font-black rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-650 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+            className="px-4 py-2 text-[10.5px] font-black rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-655 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
           >
             <Upload className="h-3.5 w-3.5" /> Bulk Import (CSV)
           </button>
@@ -149,7 +149,7 @@ export const QuestionBankPage: React.FC = () => {
       </div>
 
       {/* Filters block */}
-      <div className="bg-slate-50 p-4 border border-slate-200/60 rounded-2xl grid grid-cols-1 md:grid-cols-4 gap-4 items-end shadow-xs">
+      <div className="bg-slate-50 p-4 border border-slate-200/60 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-4 items-end shadow-xs">
         <div className="space-y-1">
           <span className="text-[9.5px] font-black text-slate-450 uppercase block">Search</span>
           <div className="relative">
@@ -189,20 +189,6 @@ export const QuestionBankPage: React.FC = () => {
             <option value="EASY">EASY</option>
             <option value="MEDIUM">MEDIUM</option>
             <option value="HARD">HARD</option>
-          </select>
-        </div>
-
-        <div className="space-y-1">
-          <span className="text-[9.5px] font-black text-slate-450 uppercase block">Status</span>
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="w-full px-3 py-1.5 border border-slate-200 focus:border-[#4F3FF0] rounded-xl outline-none text-xs font-bold text-slate-700 bg-white"
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="ACTIVE">ACTIVE</option>
-            <option value="LOCKED">LOCKED</option>
-            <option value="DRAFT">DRAFT</option>
           </select>
         </div>
       </div>
@@ -309,8 +295,8 @@ export const QuestionBankPage: React.FC = () => {
             </div>
 
             <QuestionForm
-              initialData={editingQuestion}
-              onSubmit={handleCreateOrUpdate}
+              question={editingQuestion}
+              onSave={handleCreateOrUpdate}
               onCancel={() => {
                 setShowAddEditModal(false);
                 setEditingQuestion(null);
@@ -342,7 +328,7 @@ export const QuestionBankPage: React.FC = () => {
 
             <form onSubmit={handleImportCsv} className="space-y-4">
               <div className="space-y-1">
-                <span className="text-[9.5px] font-black text-slate-450 uppercase block">Target Syllabus Module</span>
+                <span className="text-[9.5px] font-black text-slate-455 uppercase block">Target Syllabus Module</span>
                 <select
                   value={selectedCourseId}
                   onChange={(e) => setSelectedCourseId(e.target.value)}

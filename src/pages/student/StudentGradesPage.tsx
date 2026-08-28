@@ -66,6 +66,7 @@ export const StudentGradesPage: React.FC = () => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [examCourses, setExamCourses] = useState<Course[]>([]);
 
   useEffect(() => {
     if (!user?.userId) return;
@@ -73,12 +74,13 @@ export const StudentGradesPage: React.FC = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [subData, attData, asgData, exmData, crsData] = await Promise.all([
+        const [subData, attData, asgData, exmData, crsData, examCrsData] = await Promise.all([
           api.get<AssignmentSubmission[]>(`/api/v1/assignment-submissions/student/${user.userId}`).catch(() => []),
           api.get<ExamAttempt[]>(`/api/v1/exam-attempts/student/${user.userId}`).catch(() => []),
           api.get<Assignment[]>(`/api/v1/assignments`).catch(() => []),
           api.get<Exam[]>(`/api/v1/exams`).catch(() => []),
-          api.get<Course[]>(`/api/v1/courses`).catch(() => [])
+          api.get<Course[]>(`/api/v1/courses`).catch(() => []),
+          api.get<any[]>('/api/v1/exam-courses').catch(() => [])
         ]);
 
         setSubmissions(subData || []);
@@ -86,6 +88,7 @@ export const StudentGradesPage: React.FC = () => {
         setAssignments(asgData || []);
         setExams(exmData || []);
         setCourses(crsData || []);
+        setExamCourses(examCrsData || []);
       } catch (err) {
         console.error('Failed to load grades data:', err);
       } finally {
@@ -98,8 +101,9 @@ export const StudentGradesPage: React.FC = () => {
 
   // Helper Maps
   const coursesMap = useMemo(() => {
-    return new Map(courses.map(c => [c.courseId.toLowerCase(), c.courseName]));
-  }, [courses]);
+    const combined = [...courses, ...examCourses];
+    return new Map(combined.map(c => [c.courseId.toLowerCase(), c.courseName]));
+  }, [courses, examCourses]);
 
   const assignmentsMap = useMemo(() => {
     return new Map(assignments.map(a => [a.assignmentId.toLowerCase(), a]));

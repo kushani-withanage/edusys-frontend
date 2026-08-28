@@ -41,6 +41,10 @@ const getBreadcrumbLabel = (segment: string, dbCourses: any[] = [], dbExams: any
   }
   if (storedName) return storedName;
 
+  const examTitleKey = `exam_title_${segment.toLowerCase()}`;
+  const storedExamTitle = localStorage.getItem(examTitleKey);
+  if (storedExamTitle) return storedExamTitle;
+
   const customMap: Record<string, string> = {
     dashboard: 'Dashboard',
     academics: 'My Academics',

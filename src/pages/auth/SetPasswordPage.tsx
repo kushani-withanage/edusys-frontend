@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
-import Button from '@/components/common/Button';
-import TextField from '@/components/common/TextField';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { api } from '@/utils/api';
 import { toast } from '@/utils/toast';
@@ -32,9 +30,12 @@ export const SetPasswordPage: React.FC = () => {
           <AlertCircle className="h-10 w-10 text-rose-500 mx-auto mb-4" />
           <h3 className="text-base font-bold text-slate-800 mb-2">Session Expired</h3>
           <p className="text-sm text-slate-500 mb-4">Please return to the login screen and enter your email address to continue.</p>
-          <Button onClick={() => navigate('/login')} variant="solid" color="primary" className="w-full">
+          <button 
+            onClick={() => navigate('/login')} 
+            className="w-full flex items-center justify-center gap-2 py-3 bg-[#4F3FF0] hover:bg-[#4335D6] text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer"
+          >
             Back to Login
-          </Button>
+          </button>
         </div>
       </div>
     );
@@ -91,88 +92,96 @@ export const SetPasswordPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0F172A] relative overflow-hidden px-4 font-sans selection:bg-[#4F3FF0]/30 selection:text-white">
-      {/* Visual background gradients */}
-      <div className="absolute top-[-30%] left-[-20%] w-[80%] h-[80%] rounded-full bg-[#4F3FF0]/10 blur-[150px] pointer-events-none" />
-      <div className="absolute bottom-[-30%] right-[-20%] w-[80%] h-[80%] rounded-full bg-emerald-500/5 blur-[150px] pointer-events-none" />
-
-      <div className="w-full max-w-[460px] bg-slate-900/60 border border-slate-800 backdrop-blur-xl rounded-3xl p-8 md:p-10 shadow-2xl relative z-10 animate-in fade-in zoom-in-95 duration-300">
+    <div className="flex min-h-screen items-center justify-center bg-[#F8F9FD] p-4 font-sans select-none">
+      <div className="w-full max-w-[540px] bg-white rounded-3xl border border-[#E9EDF5] p-10 md:p-12 shadow-[0_8px_30px_rgb(0,0,0,0.02)] transition-all">
         
         {/* Branding header */}
-        <div className="text-center mb-8">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-tr from-[#4F3FF0] to-[#7C3AED] flex items-center justify-center shadow-lg shadow-[#4F3FF0]/30 mx-auto mb-5">
+        <div className="flex flex-col items-center text-center mb-8">
+          <div className="h-16 w-16 bg-[#4F3FF0] rounded-[20px] flex items-center justify-center shadow-[0_8px_16px_rgba(79,63,240,0.25)] mb-5">
             <Lock className="h-7 w-7 text-white" />
           </div>
-          <h2 className="text-2xl font-extrabold text-white tracking-tight mb-2 font-heading">
-            Set Your Password
-          </h2>
-          <p className="text-slate-400 text-sm leading-relaxed max-w-[320px] mx-auto">
-            Welcome, <span className="text-[#818CF8] font-bold">{fullName}</span>. Please configure a new password for your parent account to log in.
+          <h1 className="text-3xl font-extrabold text-[#111111] tracking-tight mb-2">Set Your Password</h1>
+          <p className="text-sm font-medium text-[#7E8B9B] max-w-[340px]">
+            Welcome, <span className="text-[#4F3FF0] font-bold">{fullName}</span>. Please configure a new password for your parent account to log in.
           </p>
         </div>
 
         {error && (
-          <Alert variant="destructive" className="mb-6 bg-rose-500/10 border-rose-500/20 text-rose-400 rounded-2xl">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="font-semibold text-xs">{error}</AlertDescription>
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-5 w-5 text-rose-500 mt-0.5 shrink-0" />
+            <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* New Password */}
-          <div className="space-y-1.5 text-left relative">
-            <TextField
-              label="New Password"
-              name="password"
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="Minimum 6 characters"
-              required
-              disabled={loading}
-              className="bg-slate-800/40 border-slate-800 text-white placeholder-slate-500 focus:border-[#4F3FF0] focus:bg-slate-900/40"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 bottom-3 text-slate-500 hover:text-slate-350 cursor-pointer"
-            >
-              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-            </button>
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-[#111111] tracking-wider uppercase text-left">
+              NEW PASSWORD
+            </label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-[#A0AEC0]">
+                <Lock className="h-5 w-5" />
+              </span>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Minimum 6 characters"
+                disabled={loading}
+                className="w-full pl-12 pr-12 py-4 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] focus:bg-white rounded-xl text-base text-[#1A202C] placeholder-[#A0AEC0] outline-none transition-all tracking-wider font-medium text-left"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 flex items-center pr-4 text-[#A0AEC0] hover:text-[#4F3FF0] cursor-pointer"
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
           </div>
 
           {/* Confirm Password */}
-          <div className="space-y-1.5 text-left relative">
-            <TextField
-              label="Confirm New Password"
-              name="confirmPassword"
-              type={showConfirmPassword ? 'text' : 'password'}
-              value={confirmPassword}
-              onChange={e => setConfirmPassword(e.target.value)}
-              placeholder="Re-enter password"
-              required
-              disabled={loading}
-              className="bg-slate-800/40 border-slate-800 text-white placeholder-slate-500 focus:border-[#4F3FF0] focus:bg-slate-900/40"
-            />
-            <button
-              type="button"
-              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              className="absolute right-4 bottom-3 text-slate-500 hover:text-slate-350 cursor-pointer"
-            >
-              {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-            </button>
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-[#111111] tracking-wider uppercase text-left">
+              CONFIRM NEW PASSWORD
+            </label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-[#A0AEC0]">
+                <Lock className="h-5 w-5" />
+              </span>
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                required
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                placeholder="Re-enter password"
+                disabled={loading}
+                className="w-full pl-12 pr-12 py-4 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] focus:bg-white rounded-xl text-base text-[#1A202C] placeholder-[#A0AEC0] outline-none transition-all tracking-wider font-medium text-left"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute inset-y-0 right-0 flex items-center pr-4 text-[#A0AEC0] hover:text-[#4F3FF0] cursor-pointer"
+              >
+                {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
           </div>
 
-          {/* Submit */}
-          <Button
+          {/* Submit Button */}
+          <button
             type="submit"
-            variant="solid"
-            color="primary"
-            className="w-full py-4 text-sm font-extrabold uppercase tracking-wider rounded-2xl shadow-lg shadow-[#4F3FF0]/20 mt-2 bg-[#4F3FF0] hover:bg-[#4F3FF0]/90 transition-colors"
-            isLoading={loading}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 py-4 bg-[#4F3FF0] hover:bg-[#4335D6] disabled:bg-indigo-300 text-white rounded-xl font-bold text-base shadow-[0_4px_12px_rgba(79,63,240,0.2)] hover:shadow-[0_6px_20px_rgba(79,63,240,0.3)] transition-all cursor-pointer select-none"
           >
-            Activate Account & Log In
-          </Button>
+            {loading ? (
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            ) : (
+              <span>Activate Account & Log In</span>
+            )}
+          </button>
         </form>
 
         <div className="mt-8 text-center text-xs text-slate-500">

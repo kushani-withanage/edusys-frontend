@@ -627,9 +627,9 @@ export const AddUser: React.FC = () => {
                     className="w-full pl-4 pr-10 py-3.5 bg-[#F8FAFC] border border-[#E2E8F0] focus:border-[#4F3FF0] rounded-xl text-sm text-slate-800 font-medium outline-none transition-all duration-200 focus:bg-white focus:ring-4 focus:ring-[#4F3FF0]/10 cursor-pointer"
                   >
                     <option value="">Select Batch</option>
-                    {batches.map(b => (
+                    {batches.filter(b => b.status !== 'Finished' || b.batchId === formData.currentBatchId).map(b => (
                       <option key={b.batchId} value={b.batchId}>
-                        {b.batchName}
+                        {b.batchName} {b.status === 'Finished' ? '(Finished)' : ''}
                       </option>
                     ))}
                   </select>
@@ -898,7 +898,7 @@ export const AddUser: React.FC = () => {
                 className="px-3.5 py-2.5 bg-white border border-[#E2E8F0] rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-[#4F3FF0] cursor-pointer"
               >
                 <option value="All">All Batches</option>
-                {batches.map(b => (
+                {batches.filter(b => b.status !== 'Finished').map(b => (
                   <option key={b.batchId} value={b.batchId}>{b.batchName}</option>
                 ))}
               </select>

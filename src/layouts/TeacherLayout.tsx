@@ -3,7 +3,7 @@ import MainLayout, { type SidebarGroup } from './MainLayout';
 import { 
   LayoutDashboard, 
   FileQuestion, 
-  Award,
+  BarChart3,
   Shield,
   BookOpen
 } from 'lucide-react';
@@ -20,7 +20,7 @@ const teacherSidebarGroups: SidebarGroup[] = [
     links: [
       { label: 'My Assigned Modules', path: '/teacher/courses', icon: BookOpen },
       { label: 'Question Bank & Exams', path: '/teacher/exams', icon: FileQuestion },
-      { label: 'Academic Results', path: '/teacher/results', icon: Award },
+      { label: 'All Reports', path: '/teacher/reports', icon: BarChart3 },
     ]
   }
 ];

@@ -2,16 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { api } from '@/utils/api';
 import { toast } from '@/utils/toast';
-
-export interface QuestionFormProps {
-  initialData?: any;
-  onSubmit: (data: any) => Promise<void>;
-  onCancel: () => void;
-}
+import type { QuestionFormProps } from './types';
 
 export const QuestionForm: React.FC<QuestionFormProps> = ({
-  initialData,
-  onSubmit,
+  question: initialData,
+  onSave: onSubmit,
   onCancel
 }) => {
   const [courses, setCourses] = useState<any[]>([]);
@@ -37,7 +32,7 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
 
   useEffect(() => {
     // Load courses to populate module dropdown
-    api.get<any[]>('/api/v1/courses')
+    api.get<any[]>('/api/v1/exam-courses')
       .then(data => {
         setCourses(data);
         if (!courseId && data.length > 0) {

@@ -5,7 +5,6 @@ import {
   Users, 
   BookOpen, 
   FileQuestion, 
-  Award, 
   CheckSquare, 
   UserCheck, 
   Trophy, 
@@ -42,7 +41,6 @@ const adminSidebarGroups: SidebarGroup[] = [
     category: 'Academic Process',
     links: [
       { label: 'Question Bank & Exams', path: '/admin/exams', icon: FileQuestion },
-      { label: 'Academic Results', path: '/admin/results', icon: Award },
     ]
   },
   {

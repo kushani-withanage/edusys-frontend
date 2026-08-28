@@ -28,9 +28,9 @@ export const examService = {
   async getQuestions(filters?: { courseId?: string; difficulty?: string; status?: string }) {
     let url = '/api/v1/questions';
     const params = [];
-    if (filters?.courseId) params.push(`courseId=${filters.courseId}`);
-    if (filters?.difficulty) params.push(`difficulty=${filters.difficulty}`);
-    if (filters?.status) params.push(`status=${filters.status}`);
+    if (filters?.courseId && filters.courseId !== 'ALL') params.push(`courseId=${filters.courseId}`);
+    if (filters?.difficulty && filters.difficulty !== 'ALL') params.push(`difficulty=${filters.difficulty}`);
+    if (filters?.status && filters.status !== 'ALL') params.push(`status=${filters.status}`);
     if (params.length > 0) {
       url += '?' + params.join('&');
     }

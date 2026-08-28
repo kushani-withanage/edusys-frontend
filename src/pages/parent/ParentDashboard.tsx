@@ -8,7 +8,8 @@ import {
   Mail,
   GraduationCap,
   Layers,
-  Bookmark
+  Bookmark,
+  ChevronDown
 } from 'lucide-react';
 import { api } from '@/utils/api';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -56,6 +57,8 @@ interface CareerScaleProgress {
 export const ParentDashboard: React.FC = () => {
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedChild, setSelectedChild] = useState<Child | null>(null);
+  const [isChildDropdownOpen, setIsChildDropdownOpen] = useState(false);
+  const childDropdownRef = React.useRef<HTMLDivElement>(null);
   
 
   const [exams, setExams] = useState<ExamRecord[]>([]);
@@ -67,6 +70,16 @@ export const ParentDashboard: React.FC = () => {
 
   // Tabs: 'exams' | 'career'
   const [activeTab, setActiveTab] = useState<'exams' | 'career'>('exams');
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (childDropdownRef.current && !childDropdownRef.current.contains(e.target as Node)) {
+        setIsChildDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   // Load children on mount
   useEffect(() => {
@@ -115,14 +128,7 @@ export const ParentDashboard: React.FC = () => {
     fetchChildData();
   }, [selectedChild]);
 
-  // Calculate Rolling GPA
-  const rollingGpa = React.useMemo(() => {
-    if (exams.length === 0) return 'N/A';
-    const graded = exams.filter(e => e.score !== null);
-    if (graded.length === 0) return 'N/A';
-    const sum = graded.reduce((acc, curr) => acc + (curr.score || 0), 0);
-    return (sum / graded.length).toFixed(1) + '%';
-  }, [exams]);
+
 
   // Format date helper
   const formatDate = (isoString: string | null) => {
@@ -168,22 +174,38 @@ export const ParentDashboard: React.FC = () => {
 
         {/* Child Selector */}
         {children.length > 0 && (
-          <div className="flex items-center gap-3 bg-white border border-[#E2E8F0] px-4 py-2.5 rounded-2xl shadow-sm">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Select Child:</span>
-            <select
-              value={selectedChild?.studentId || ''}
-              onChange={e => {
-                const child = children.find(c => c.studentId === e.target.value);
-                if (child) setSelectedChild(child);
-              }}
-              className="text-sm font-bold text-slate-700 outline-none bg-transparent cursor-pointer hover:text-[#4F3FF0] transition-colors"
+          <div ref={childDropdownRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setIsChildDropdownOpen(prev => !prev)}
+              className="flex items-center gap-1.5 bg-white border border-[#E2E8F0] px-5 py-3 rounded-full hover:border-[#4F3FF0]/40 hover:shadow-md transition-all duration-200 cursor-pointer text-xs font-black shadow-sm uppercase select-none"
             >
-              {children.map(c => (
-                <option key={c.studentId} value={c.studentId}>
-                  {c.fullName}
-                </option>
-              ))}
-            </select>
+              <span className="text-slate-400 font-extrabold tracking-wider">Select Child:</span>
+              <span className="text-slate-800 font-extrabold normal-case pl-1">
+                {selectedChild?.fullName || ''}
+              </span>
+              <ChevronDown className="h-4 w-4 text-slate-400 pl-0.5 shrink-0" />
+            </button>
+            
+            {isChildDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-52 bg-white border border-[#E9EDF5] rounded-2xl shadow-xl z-50 overflow-hidden py-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
+                {children.map(c => (
+                  <button
+                    key={c.studentId}
+                    type="button"
+                    onClick={() => {
+                      setSelectedChild(c);
+                      setIsChildDropdownOpen(false);
+                    }}
+                    className={`w-full px-4 py-2.5 text-left text-xs font-extrabold text-slate-700 hover:bg-[#4F3FF0]/5 hover:text-[#4F3FF0] transition-colors ${
+                      selectedChild?.studentId === c.studentId ? 'bg-[#4F3FF0]/5 text-[#4F3FF0]' : ''
+                    }`}
+                  >
+                    {c.fullName}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -226,11 +248,6 @@ export const ParentDashboard: React.FC = () => {
 
               {/* Aggregated KPI Cards */}
               <div className="flex gap-4">
-                {/* GPA standing */}
-                <div className="bg-[#F8FAFC] border border-[#E2E8F0] px-5 py-3 rounded-2xl text-center min-w-[110px]">
-                  <span className="text-[9px] font-black text-slate-450 uppercase tracking-wider block mb-0.5">Academic standing</span>
-                  <span className="text-xl font-black text-[#4F3FF0] block font-heading">{rollingGpa}</span>
-                </div>
                 {/* Career points */}
                 <div className="bg-[#F8FAFC] border border-[#E2E8F0] px-5 py-3 rounded-2xl text-center min-w-[110px]">
                   <span className="text-[9px] font-black text-slate-450 uppercase tracking-wider block mb-0.5">Career Scale level</span>

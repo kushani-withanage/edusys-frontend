@@ -180,21 +180,33 @@ export const StudentAcademics: React.FC = () => {
                           </span>
                         </td>
                         <td className="px-6 py-4.5 text-right">
-                          {status === 'AVAILABLE' && (
+                          {exam.isModuleTargeted && (status === 'AVAILABLE' || status === 'IN_PROGRESS') ? (
                             <button
-                              onClick={() => setConfirmStartExam(exam)}
-                              className="px-4 py-2 bg-[#4F3FF0] hover:bg-[#4335D6] text-white text-[10px] font-black rounded-xl shadow-sm cursor-pointer inline-flex items-center gap-1.5 transition-all"
+                              disabled
+                              className="px-4 py-2 border border-slate-200 bg-slate-50 text-slate-400 text-[10px] font-black rounded-xl inline-flex items-center gap-1.5 cursor-not-allowed select-none"
+                              title="This exam must be accessed through its specific course module outline page."
                             >
-                              <Play className="h-3.5 w-3.5 shrink-0" /> Start Test
+                              🔒 Access via Course Outline
                             </button>
-                          )}
-                          {status === 'IN_PROGRESS' && (
-                            <button
-                              onClick={() => navigate(`/student/exams/${exam.id}/take`)}
-                              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black rounded-xl shadow-sm cursor-pointer inline-flex items-center gap-1.5 transition-all"
-                            >
-                              <Play className="h-3.5 w-3.5 shrink-0" /> Resume Test
-                            </button>
+                          ) : (
+                            <>
+                              {status === 'AVAILABLE' && (
+                                <button
+                                  onClick={() => setConfirmStartExam(exam)}
+                                  className="px-4 py-2 bg-[#4F3FF0] hover:bg-[#4335D6] text-white text-[10px] font-black rounded-xl shadow-sm cursor-pointer inline-flex items-center gap-1.5 transition-all"
+                                >
+                                  <Play className="h-3.5 w-3.5 shrink-0" /> Start Test
+                                </button>
+                              )}
+                              {status === 'IN_PROGRESS' && (
+                                <button
+                                  onClick={() => navigate(`/student/exams/${exam.id}/take`)}
+                                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black rounded-xl shadow-sm cursor-pointer inline-flex items-center gap-1.5 transition-all"
+                                >
+                                  <Play className="h-3.5 w-3.5 shrink-0" /> Resume Test
+                                </button>
+                              )}
+                            </>
                           )}
                           {status === 'COMPLETED' && (
                             <button

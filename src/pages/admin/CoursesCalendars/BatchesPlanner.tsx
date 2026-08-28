@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Loader2, Trash2, X, AlertCircle } from 'lucide-react';
 import { batchService } from '@/services/batchService';
-import { courseService } from '@/services/courseService';
 import { api } from '@/utils/api';
 import { toast } from '@/utils/toast';
 import type { Batch } from './types';
@@ -26,8 +25,6 @@ export const BatchesPlanner: React.FC<BatchesPlannerProps> = ({ addTrigger = 0 }
   const [inlineError, setInlineError] = useState('');
   const checkTimeoutRef = useRef<any>(null);
 
-  // New course selection states
-  const [allCourses, setAllCourses] = useState<any[]>([]);
   const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
 
   // Batch Detail modal state
@@ -47,15 +44,11 @@ export const BatchesPlanner: React.FC<BatchesPlannerProps> = ({ addTrigger = 0 }
   const fetchBatchesAndCourses = async () => {
     try {
       setLoading(true);
-      const [batchesData, coursesData] = await Promise.all([
-        batchService.getBatches(),
-        courseService.getCourses().catch(() => [])
-      ]);
+      const batchesData = await batchService.getBatches();
       setBatches(batchesData || []);
-      setAllCourses(coursesData || []);
     } catch (err) {
-      console.error('Error fetching batches or courses:', err);
-      toast.error('Failed to load batches or courses.');
+      console.error('Error fetching batches:', err);
+      toast.error('Failed to load batches.');
     } finally {
       setLoading(false);
     }
@@ -355,35 +348,7 @@ export const BatchesPlanner: React.FC<BatchesPlannerProps> = ({ addTrigger = 0 }
                 </select>
               </div>
 
-              <div className="space-y-2.5">
-                <label className="block text-xs font-bold tracking-wider uppercase text-slate-700">Assign Courses & Modules</label>
-                {allCourses.length === 0 ? (
-                  <p className="text-slate-400 text-xs font-semibold">No courses registered in system.</p>
-                ) : (
-                  <div className="max-h-[140px] overflow-y-auto border border-[#E2E8F0] rounded-xl p-3 bg-[#F8FAFC] space-y-2">
-                    {allCourses.map((c: any) => {
-                      const isChecked = selectedCourseIds.includes(c.courseId);
-                      return (
-                        <label key={c.courseId} className="flex items-center gap-2.5 text-xs text-slate-700 font-bold select-none cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => {
-                              setSelectedCourseIds(prev => 
-                                isChecked 
-                                  ? prev.filter(id => id !== c.courseId)
-                                  : [...prev, c.courseId]
-                              );
-                            }}
-                            className="rounded text-[#4F3FF0] focus:ring-[#4F3FF0] border-slate-300 cursor-pointer"
-                          />
-                          <span>{c.courseName}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <Button 

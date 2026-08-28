@@ -242,12 +242,6 @@ const Dashboard: React.FC = () => {
                 <span className="block text-3xl font-extrabold text-[#111111] tracking-tight transition-transform duration-300 group-hover:translate-x-0.5">
                   {card.value}
                 </span>
-                <span
-                  className={`inline-block text-[11px] font-bold ${card.isPositive ? 'text-emerald-600' : 'text-rose-600'
-                    }`}
-                >
-                  {card.trend}
-                </span>
               </div>
               <div className={`h-14 w-14 rounded-2xl ${card.iconBg} ${card.iconColor} flex items-center justify-center shadow-md shadow-transparent transition-all duration-300 group-hover:scale-105 group-hover:shadow-[#4F3FF0]/5`}>
                 <Icon className="h-6 w-6 transition-transform duration-300 group-hover:rotate-3" />

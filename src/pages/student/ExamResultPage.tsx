@@ -17,6 +17,10 @@ export const ExamResultPage: React.FC = () => {
         setLoading(true);
         const res = await api.get<any>(`/api/v1/student-exams/attempts/${attemptId}/result`);
         setResult(res);
+        if (res && res.examTitle && attemptId) {
+          localStorage.setItem(`exam_title_${attemptId.toLowerCase()}`, res.examTitle);
+          window.dispatchEvent(new Event('update-breadcrumbs'));
+        }
       } catch (err: any) {
         console.error(err);
         toast.error('Failed to retrieve exam attempt results.');
